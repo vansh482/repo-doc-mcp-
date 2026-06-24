@@ -16,13 +16,14 @@
 # LLM Configuration — which AI model generates the documentation
 # ---------------------------------------------------------------------------
 llm:
-  # Provider: "anthropic" (Claude), "openai" (GPT), or "ollama" (local models)
+  # Provider: "anthropic" (Claude), "openai" (GPT), "ollama" (local), or "bedrock" (AWS)
   provider: "anthropic"
 
   # Model name — depends on the provider:
   #   Anthropic: claude-sonnet-4-20250514, claude-opus-4-20250514, claude-haiku-4-5-20251001
   #   OpenAI:    gpt-4o, gpt-4-turbo, gpt-3.5-turbo
   #   Ollama:    llama3.1, codellama, mistral, deepseek-coder, etc.
+  #   Bedrock:   arn:aws:bedrock:REGION:ACCOUNT:inference-profile/ID
   model: "claude-sonnet-4-20250514"
 
   # API key — leave empty to use environment variables:
