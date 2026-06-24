@@ -532,11 +532,6 @@ ENTRY_POINTS: <comma-separated list of main files/scripts that serve as entry po
 
         for line in response.splitlines():
             if line.startswith("PURPOSE:"):
-                if current_field:
-                    self._assign_parsed_field(
-                        current_field, "\n".join(current_content).strip(),
-                        locals()
-                    )
                 current_field = "purpose"
                 current_content = [line.replace("PURPOSE:", "").strip()]
             elif line.startswith("ARCHITECTURE:"):
@@ -601,6 +596,3 @@ ENTRY_POINTS: <comma-separated list of main files/scripts that serve as entry po
 
         return "\n".join(lines)
 
-    def _assign_parsed_field(self, field: str, value: str, local_vars: dict) -> None:
-        """Helper to assign parsed values — used during response parsing."""
-        pass  # Handled inline in _parse_project_analysis
