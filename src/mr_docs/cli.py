@@ -124,7 +124,7 @@ Examples:
     # LLM options
     parser.add_argument(
         "--provider", "-p",
-        choices=["anthropic", "openai", "ollama"],
+        choices=["anthropic", "openai", "ollama", "bedrock"],
         default=None,
         help="LLM provider override",
     )
