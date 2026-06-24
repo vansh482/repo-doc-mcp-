@@ -132,7 +132,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     branch_parser.add_argument(
         "--provider",
-        choices=["anthropic", "openai", "ollama"],
+        choices=["anthropic", "openai", "ollama", "bedrock"],
         default=None,
         help="LLM provider override",
     )
@@ -216,7 +216,7 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--provider",
-        choices=["anthropic", "openai", "ollama"],
+        choices=["anthropic", "openai", "ollama", "bedrock"],
         default=None,
         help="LLM provider override",
     )
