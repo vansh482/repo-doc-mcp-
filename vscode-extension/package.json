@@ -105,6 +105,12 @@
           "default": "main",
           "description": "The base branch to compare against (main, master, or mainline)."
         },
+        "repoDoc.docLength": {
+          "type": "string",
+          "enum": ["concise", "standard", "detailed"],
+          "default": "concise",
+          "description": "How detailed the generated docs should be. Concise (~500 words), Standard (~1000 words), Detailed (~2000 words)."
+        },
         "repoDoc.bedrock.region": {
           "type": "string",
           "default": "us-west-2",
