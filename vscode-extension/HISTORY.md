@@ -7,7 +7,7 @@ This file tracks the evolution of this VS Code extension — what was decided, w
 ## 2026-08-20 — Initial Architecture Decision
 
 ### Context
-The parent project (`repo-doc-mcp`) is a Python-based MCP server that generates AI-powered documentation for codebases. It supports full repo scanning, branch-aware docs, Confluence/Google Docs publishing, and has prototype VS Code/IntelliJ extensions (see `../mcp/mcp2/` and `../repo-doc-mcp/vscode-extension/`).
+The parent project (`repo-doc-mcp`) is a Python-based MCP server that generates AI-powered documentation for codebases. It supports full repo scanning, branch-aware docs, Confluence/Google Docs publishing, and had prototype VS Code/IntelliJ extensions. This folder (`vscode-extension/`) is the canonical TypeScript rewrite that replaced those prototypes.
 
 ### Decision: Rewrite in TypeScript (not bundle Python)
 **Why:**
@@ -110,6 +110,34 @@ Tracker: check if this branch already has Confluence pages
 - [ ] Streaming LLM output in UI
 - [ ] Multi-workspace support
 - [ ] VS Code Marketplace publishing automation
+
+---
+
+## 2026-08-20 — UX Improvements (same day)
+
+### Changes
+1. **Setup wizard → Webview form** — Replaced sequential `showInputBox` calls with a persistent webview panel. All fields visible at once, stays open when switching windows.
+2. **Progress indicator** — Added step numbering (Step 1/5 through 5/5), elapsed time display, visual progress bar, and cancel button.
+3. **Doc quality** — Rewrote prompts to be concise (500-800 words technical, 200-400 words non-technical). Focus on WHY/decisions/risks, not per-file listings.
+4. **Confluence formatting** — Improved markdown→XHTML converter: proper tables, mermaid diagram handling, nested/ordered lists, links, horizontal rules.
+
+### Why
+- Input boxes disappear on focus loss — unacceptable for 7-step setup
+- Users couldn't tell if generation was stuck or working
+- Initial doc output was 3000+ words with per-file breakdowns nobody reads
+- Tables/diagrams rendered broken in Confluence
+
+---
+
+## 2026-08-20 — Folder Rename & Cleanup
+
+### Changes
+- Deleted old `vscode-extension/` (the Python-dependent prototype from 2 months ago)
+- Renamed `vscode-extension-ts/` → `vscode-extension/` (now the canonical location)
+- Merged everything to `main`
+
+### Why
+Having two extension folders was confusing. The old prototype is fully superseded — the new TypeScript version is self-contained and working.
 
 ---
 

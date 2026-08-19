@@ -1,0 +1,228 @@
+<!--
+    Plugin Descriptor — the manifest for the IntelliJ plugin.
+
+    IntelliJ reads this file to understand:
+    - What the plugin is called and what it does
+    - Which IDE features it hooks into (actions, tool windows, services)
+    - What keyboard shortcuts it registers
+    - Which menu items it adds
+    - What other plugins it depends on
+
+    ARCHITECTURE MAPPING (VS Code → IntelliJ):
+    ┌──────────────────────┬──────────────────────────┐
+    │ VS Code Concept      │ IntelliJ Equivalent      │
+    ├──────────────────────┼──────────────────────────┤
+    │ Command              │ Action                   │
+    │ Command Palette      │ Actions Search (Ctrl+A)  │
+    │ Webview Panel        │ Tool Window              │
+    │ Activity Bar Sidebar │ Tool Window (left stripe)│
+    │ Extension Settings   │ Configurable + Settings  │
+    │ Output Channel       │ Console / Log tab        │
+    └──────────────────────┴──────────────────────────┘
+-->
+<idea-plugin>
+    <id>com.repodoc.generator</id>
+    <name>Repo Doc Generator</name>
+    <vendor email="support@repodoc.dev" url="https://github.com/repodoc">
+        Repo Doc
+    </vendor>
+
+    <description><![CDATA[
+        <h2>Repo Doc Generator</h2>
+        <p>Generate comprehensive documentation for your codebase using AI — 
+        both technical docs for engineers and plain-English guides for everyone else.</p>
+
+        <h3>Features</h3>
+        <ul>
+            <li><b>One-Click Documentation</b> — Generate both technical and non-technical docs 
+            from the currently open project</li>
+            <li><b>Built-in Doc Viewer</b> — Read generated docs right inside your IDE with 
+            tabbed navigation and a table of contents</li>
+            <li><b>Per-MR Documentation</b> — Generate focused docs for any merge request or 
+            branch comparison</li>
+            <li><b>Auto-Update</b> — Keep docs in sync with main branch changes via git hooks 
+            or CI/CD integration</li>
+            <li><b>Multi-LLM Support</b> — Use Claude, GPT-4, or local Ollama models</li>
+        </ul>
+
+        <h3>How It Works</h3>
+        <p>The plugin connects to a Python-based MCP server that scans your repository, 
+        analyzes the code structure using AI, and generates two types of documentation:</p>
+        <ul>
+            <li><b>Technical Doc</b> — Architecture, API references, data flow, setup guides</li>
+            <li><b>Non-Technical Guide</b> — Plain English explanations with analogies, 
+            no jargon, for PMs and stakeholders</li>
+        </ul>
+    ]]></description>
+
+    <!-- Minimum IntelliJ build number required -->
+    <idea-version since-build="241"/>
+
+    <!-- Plugin dependencies — these are built-in IntelliJ plugins we require -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- 
+            Tool Window — the sidebar panel that shows doc generation actions.
+            This is the IntelliJ equivalent of VS Code's Activity Bar sidebar.
+            It appears as an icon on the left/right stripe of the IDE.
+        -->
+        <toolWindow
+            id="Repo Documentation"
+            anchor="right"
+            icon="/icons/repodoc.svg"
+            factoryClass="com.repodoc.ui.DocToolWindowFactory"
+        />
+
+        <!--
+            Application-level service — manages the MCP client connection.
+            Services are singletons that persist for the lifetime of the IDE.
+            Application services are shared across all projects; project services
+            are per-project. We use a project service because each project
+            has its own repo to document.
+        -->
+        <projectService
+            serviceImplementation="com.repodoc.services.RepoDocSettings"
+        />
+
+        <projectService
+            serviceImplementation="com.repodoc.services.RepoDocService"
+        />
+
+        <projectService
+            serviceImplementation="com.repodoc.services.BranchWatcherService"
+        />
+
+        <!-- Status bar widget showing doc status and current branch -->
+        <statusBarWidgetFactory
+            id="RepoDocStatus"
+            implementation="com.repodoc.services.RepoDocStatusWidgetFactory"
+        />
+
+        <!-- Start branch watcher when project opens -->
+        <postStartupActivity
+            implementation="com.repodoc.services.RepoDocStartupActivity"
+        />
+
+        <!--
+            Settings/Preferences page — where users configure the plugin.
+            This appears under Settings → Tools → Repo Doc Generator.
+        -->
+        <projectConfigurable
+            parentId="tools"
+            instance="com.repodoc.ui.RepoDocSettingsConfigurable"
+            id="com.repodoc.settings"
+            displayName="Repo Doc Generator"
+        />
+
+        <!--
+            Notification group — for showing success/error notifications.
+            IntelliJ has a rich notification system (balloons, sticky, log-only).
+        -->
+        <notificationGroup
+            id="Repo Doc Notifications"
+            displayType="BALLOON"
+        />
+    </extensions>
+
+    <actions>
+        <!--
+            Action Group — groups related actions in the menu.
+            These appear in Tools → Repo Doc and in the right-click context menu.
+        -->
+        <group
+            id="RepoDoc.ActionGroup"
+            text="Repo Doc"
+            description="Repository documentation generation"
+            popup="true"
+        >
+            <!-- Generate Both Docs — the primary action -->
+            <action
+                id="RepoDoc.GenerateDocs"
+                class="com.repodoc.actions.GenerateDocsAction"
+                text="Generate Documentation (Both)"
+                description="Generate technical and non-technical documentation for this project"
+                icon="AllIcons.Actions.GeneratedFolder"
+            >
+                <keyboard-shortcut
+                    keymap="$default"
+                    first-keystroke="ctrl shift D"
+                />
+                <keyboard-shortcut
+                    keymap="Mac OS X 10.5+"
+                    first-keystroke="meta shift D"
+                />
+            </action>
+
+            <!-- Generate Technical Doc Only -->
+            <action
+                id="RepoDoc.GenerateTechnicalDoc"
+                class="com.repodoc.actions.GenerateTechnicalDocAction"
+                text="Generate Technical Documentation"
+                description="Generate only the technical documentation for engineers"
+            />
+
+            <!-- Generate Non-Technical Doc Only -->
+            <action
+                id="RepoDoc.GenerateNonTechnicalDoc"
+                class="com.repodoc.actions.GenerateNonTechnicalDocAction"
+                text="Generate Non-Technical Guide"
+                description="Generate only the non-technical guide for stakeholders"
+            />
+
+            <separator/>
+
+            <!-- Generate MR Documentation -->
+            <action
+                id="RepoDoc.GenerateMRDocs"
+                class="com.repodoc.actions.GenerateMRDocsAction"
+                text="Generate MR Documentation..."
+                description="Generate documentation for a specific merge request or branch"
+            />
+
+            <separator/>
+
+            <!-- Quick Repo Summary (no LLM) -->
+            <action
+                id="RepoDoc.RepoSummary"
+                class="com.repodoc.actions.RepoSummaryAction"
+                text="Show Repository Summary"
+                description="Quick scan of the repository (no AI calls needed)"
+            />
+
+            <!-- Check for Updates -->
+            <action
+                id="RepoDoc.CheckUpdate"
+                class="com.repodoc.actions.CheckUpdateAction"
+                text="Check for Doc Updates"
+                description="Check if documentation needs updating based on recent commits"
+            />
+
+            <separator/>
+
+            <!-- View Last Generated Docs -->
+            <action
+                id="RepoDoc.ViewDocs"
+                class="com.repodoc.actions.ViewDocsAction"
+                text="View Generated Documentation"
+                description="Open previously generated documentation in the viewer"
+            />
+        </group>
+
+        <!--
+            Register the action group in the IDE menus.
+            This makes our actions appear in Tools menu and the Editor popup.
+        -->
+        <group id="RepoDoc.ToolsMenu">
+            <reference ref="RepoDoc.ActionGroup"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </group>
+
+        <!-- Also add "Generate Docs" to the project right-click context menu -->
+        <group id="RepoDoc.ProjectContextMenu">
+            <reference ref="RepoDoc.GenerateDocs"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </group>
+    </actions>
+</idea-plugin>
