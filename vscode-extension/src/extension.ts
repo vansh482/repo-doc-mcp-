@@ -1,664 +1,261 @@
-/**
- * Extension Entry Point — the "main()" of the VS Code extension.
- *
- * When VS Code loads this extension, it calls the `activate()` function below.
- * That function registers all commands, sets up the sidebar, creates the MCP client,
- * and wires everything together.
- *
- * ARCHITECTURE:
- *
- *   User Action (command palette / keyboard shortcut / sidebar button)
- *        │
- *        ▼
- *   Command Handler (this file)
- *        │
- *        ├─→ MCPClient.callTool()  ──→  Python MCP Server (subprocess)
- *        │                                    │
- *        │                              Scans repo, analyzes code,
- *        │                              generates docs via LLM
- *        │                                    │
- *        ├─← Result (markdown docs)  ◄────────┘
- *        │
- *        ▼
- *   DocViewerPanel.show()  ──→  Webview (rendered HTML with tabs, TOC, etc.)
- *
- *
- * COMMANDS REGISTERED:
- *   repoDoc.generateDocs         — Generate both tech and non-tech docs
- *   repoDoc.generateTechnicalDoc — Generate only the technical doc
- *   repoDoc.generateNonTechnicalDoc — Generate only the non-technical guide
- *   repoDoc.showRepoSummary      — Quick scan (no LLM calls)
- *   repoDoc.openSettings         — Open the extension's settings page
- *   repoDoc.viewLastDoc          — Re-open previously generated docs
- */
+import * as vscode from 'vscode';
+import { SecretStore } from './config/secrets';
+import { getConfig, isConfigured } from './config/settings';
+import { runSetupWizard } from './config/wizard';
+import { getBranchDiff, detectBaseBranch } from './git/diff';
+import { scanRepo } from './scanner/scanner';
+import { createProvider } from './llm/provider';
+import { generateDocs } from './generator/generator';
+import { ConfluencePublisher } from './publisher/confluence';
+import { DocTracker } from './tracker/tracker';
 
-import * as vscode from "vscode";
-import * as path from "path";
-import * as fs from "fs";
-import * as cp from "child_process";
-import { MCPClient, createMCPClient } from "./mcpClient";
-import { DocViewerPanel } from "./webview/docViewer";
-import { SidebarProvider } from "./webview/sidebarProvider";
-
-// ──────────────────────────────────────────────────────────────────────
-// Extension State — persists across command invocations within a session
-// ──────────────────────────────────────────────────────────────────────
-
-let mcpClient: MCPClient;
+let secretStore: SecretStore;
+let docTracker: DocTracker;
 let outputChannel: vscode.OutputChannel;
-let sidebarProvider: SidebarProvider;
-let statusBarItem: vscode.StatusBarItem;
-let currentBranch: string = "";
-let watcherInterval: ReturnType<typeof setInterval> | undefined;
-let branchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
-
-// ──────────────────────────────────────────────────────────────────────
-// Activation — called once when the extension first loads
-// ──────────────────────────────────────────────────────────────────────
+let extensionUri: vscode.Uri;
 
 export function activate(context: vscode.ExtensionContext): void {
-  // Create an output channel for logging (visible in VS Code's Output panel)
-  outputChannel = vscode.window.createOutputChannel("Repo Doc Generator");
-  outputChannel.appendLine("Repo Doc Generator extension activated");
-
-  // Create the MCP client that communicates with our Python server
-  mcpClient = createMCPClient(outputChannel);
-
-  // Register the sidebar provider (activity bar icon + sidebar panel)
-  sidebarProvider = new SidebarProvider(context.extensionUri);
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      SidebarProvider.viewType,
-      sidebarProvider,
-    ),
-  );
-
-  // ── Register Commands ──
-  // Each command corresponds to a button in the sidebar or a command palette entry.
-  // The pattern is: register the command, link it to a handler function.
+  outputChannel = vscode.window.createOutputChannel('Repo Doc Generator');
+  secretStore = new SecretStore(context.secrets);
+  docTracker = new DocTracker(context.workspaceState);
+  extensionUri = context.extensionUri;
 
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "repoDoc.generateDocs",
-      () => handleGenerateDocs(context, "both"),
-    ),
+    vscode.commands.registerCommand('repoDoc.run', () => handleRun(context)),
+    vscode.commands.registerCommand('repoDoc.setup', () => handleSetup()),
+    vscode.commands.registerCommand('repoDoc.viewDocs', () => handleViewDocs()),
+    outputChannel
   );
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "repoDoc.generateTechnicalDoc",
-      () => handleGenerateDocs(context, "technical"),
-    ),
-  );
+  checkFirstRun(context);
+}
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "repoDoc.generateNonTechnicalDoc",
-      () => handleGenerateDocs(context, "non-technical"),
-    ),
-  );
+async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
+  const hasRun = context.globalState.get<boolean>('repoDoc.hasCompletedSetup');
+  if (hasRun) return;
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "repoDoc.showRepoSummary",
-      () => handleRepoSummary(),
-    ),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "repoDoc.openSettings",
-      () => {
-        // Open VS Code settings, pre-filtered to our extension's settings
-        vscode.commands.executeCommand(
-          "workbench.action.openSettings",
-          "repoDoc",
-        );
-      },
-    ),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "repoDoc.viewLastDoc",
-      () => handleViewLastDoc(context),
-    ),
-  );
-
-  // Also push the output channel so it gets disposed on deactivation
-  context.subscriptions.push(outputChannel);
-
-  // ── Status Bar Item ──
-  // Shows doc freshness: "$(book) Docs: up-to-date" or "$(sync~spin) Docs: updating..."
-  statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Left,
-    50,
-  );
-  statusBarItem.command = "repoDoc.viewLastDoc";
-  statusBarItem.tooltip = "Repo Doc Generator — click to view docs";
-  updateStatusBar("idle");
-  statusBarItem.show();
-  context.subscriptions.push(statusBarItem);
-
-  // ── Branch Detection ──
-  // Watch .git/HEAD for changes (indicates branch switch)
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (workspaceFolder) {
-    const repoPath = workspaceFolder.uri.fsPath;
-    currentBranch = detectBranch(repoPath);
-    updateStatusBar("idle", currentBranch);
-
-    const gitHeadPattern = new vscode.RelativePattern(
-      workspaceFolder,
-      ".git/HEAD",
+  const config = getConfig();
+  const configured = await isConfigured(config, secretStore);
+  if (!configured) {
+    const action = await vscode.window.showInformationMessage(
+      'Welcome to Repo Doc Generator! Configure your LLM and Confluence settings to get started.',
+      'Setup Now',
+      'Later'
     );
-    const gitHeadWatcher = vscode.workspace.createFileSystemWatcher(gitHeadPattern);
-
-    gitHeadWatcher.onDidChange(() => {
-      const newBranch = detectBranch(repoPath);
-      if (newBranch && newBranch !== currentBranch) {
-        const previousBranch = currentBranch;
-        currentBranch = newBranch;
-        outputChannel.appendLine(
-          `Branch switched: ${previousBranch} → ${currentBranch}`,
-        );
-        updateStatusBar("idle", currentBranch);
-
-        // Auto-generate branch docs if enabled (debounced)
-        const config = vscode.workspace.getConfiguration("repoDoc");
-        if (config.get<boolean>("watcher.autoGenerateBranchDocs")) {
-          if (branchDebounceTimer) {
-            clearTimeout(branchDebounceTimer);
-          }
-          branchDebounceTimer = setTimeout(() => {
-            handleBranchDocsGeneration(context, currentBranch);
-          }, 3000); // 3-second debounce to let git operations settle
-        }
+    if (action === 'Setup Now') {
+      const completed = await runSetupWizard(secretStore, context.extensionUri);
+      if (completed) {
+        await context.globalState.update('repoDoc.hasCompletedSetup', true);
       }
-    });
-
-    context.subscriptions.push(gitHeadWatcher);
-
-    // ── Background Watcher ──
-    // Periodically check if main branch docs need updating
-    const watcherConfig = vscode.workspace.getConfiguration("repoDoc");
-    if (watcherConfig.get<boolean>("watcher.enabled")) {
-      const intervalMinutes = watcherConfig.get<number>("watcher.intervalMinutes") || 5;
-      startBackgroundWatcher(context, repoPath, intervalMinutes);
     }
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Command Handlers — the business logic for each command
-// ──────────────────────────────────────────────────────────────────────
-
-/**
- * Handle the main "Generate Documentation" command.
- *
- * This is the primary flow:
- * 1. Get the workspace folder path
- * 2. Run health check on the MCP server
- * 3. Show a progress notification with cancel support
- * 4. Call the MCP server to generate docs
- * 5. Read the generated markdown files
- * 6. Display them in the DocViewer webview panel
- *
- * The `docType` parameter controls which doc(s) to generate.
- */
-async function handleGenerateDocs(
-  context: vscode.ExtensionContext,
-  docType: "both" | "technical" | "non-technical",
-): Promise<void> {
-  // ── Step 1: Get workspace path ──
-  const workspaceFolder = getWorkspaceFolder();
+async function handleRun(context: vscode.ExtensionContext): Promise<void> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder) {
-    return; // getWorkspaceFolder shows an error message if no workspace
+    vscode.window.showErrorMessage('Open a folder first.');
+    return;
   }
 
-  const repoPath = workspaceFolder.uri.fsPath;
-  const repoName = workspaceFolder.name;
-
-  outputChannel.appendLine(`\n${"=".repeat(60)}`);
-  outputChannel.appendLine(
-    `Generating ${docType} docs for: ${repoName} (${repoPath})`,
-  );
-
-  // ── Step 2: Health check ──
-  const health = await mcpClient.healthCheck();
-  if (!health.ok) {
-    const action = await vscode.window.showErrorMessage(
-      `MCP Server Error: ${health.message}`,
-      "Open Settings",
-      "View Output",
+  const config = getConfig();
+  const configured = await isConfigured(config, secretStore);
+  if (!configured) {
+    const action = await vscode.window.showWarningMessage(
+      'Extension not configured. Run setup first.',
+      'Setup Now'
     );
-    if (action === "Open Settings") {
-      vscode.commands.executeCommand(
-        "workbench.action.openSettings",
-        "repoDoc",
-      );
-    } else if (action === "View Output") {
-      outputChannel.show();
+    if (action === 'Setup Now') {
+      await runSetupWizard(secretStore, context.extensionUri);
     }
     return;
   }
 
-  // ── Step 3: Generate with progress ──
-  // Update sidebar status
-  sidebarProvider.updateStatus({
-    state: "generating",
-    message: "Generating documentation...",
-  });
+  const repoPath = workspaceFolder.uri.fsPath;
 
-  // Map our docType to the MCP tool name
-  const toolName =
-    docType === "both"
-      ? "generate_docs"
-      : docType === "technical"
-        ? "generate_technical_doc"
-        : "generate_non_technical_doc";
-
-  // Use VS Code's built-in progress notification.
-  // This shows a progress bar in the notification area with a cancel button.
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Generating ${docType} documentation for ${repoName}...`,
+      title: 'Repo Doc',
       cancellable: true,
     },
     async (progress, token) => {
-      progress.report({ message: "Starting MCP server..." });
+      const startTime = Date.now();
+      const elapsed = () => Math.round((Date.now() - startTime) / 1000);
 
       try {
-        // Call the MCP server (this spawns the Python process)
-        const result = await mcpClient.callTool(
-          toolName,
-          { repo_path: repoPath },
-          token,
-        );
+        // Step 1: Git diff
+        progress.report({ message: `Step 1/5: Detecting branch and computing diff... (${elapsed()}s)`, increment: 0 });
+        const baseBranch = config.baseBranch || await detectBaseBranch(repoPath);
+        const diff = await getBranchDiff(repoPath, baseBranch);
+        progress.report({ increment: 10 });
 
-        if (!result.success) {
-          throw new Error(result.error || "Unknown error during doc generation");
+        if (token.isCancellationRequested) {
+          vscode.window.showWarningMessage('Doc generation cancelled.');
+          return;
         }
 
-        outputChannel.appendLine(`Generation complete: ${result.content}`);
-
-        // ── Step 4: Read generated files ──
-        const config = vscode.workspace.getConfiguration("repoDoc");
-        const outputDir = config.get<string>("output.directory") || "./docs/generated";
-        const fullOutputDir = path.isAbsolute(outputDir)
-          ? outputDir
-          : path.join(repoPath, outputDir);
-
-        const techDocPath = path.join(fullOutputDir, "TECHNICAL_DOC.md");
-        const nonTechDocPath = path.join(fullOutputDir, "NON_TECHNICAL_GUIDE.md");
-
-        let techContent = "";
-        let nonTechContent = "";
-
-        if (fs.existsSync(techDocPath)) {
-          techContent = fs.readFileSync(techDocPath, "utf-8");
-        }
-        if (fs.existsSync(nonTechDocPath)) {
-          nonTechContent = fs.readFileSync(nonTechDocPath, "utf-8");
-        }
-
-        // ── Step 5: Show in webview ──
-        const shouldAutoOpen = config.get<boolean>("autoOpen") ?? true;
-        if (shouldAutoOpen && (techContent || nonTechContent)) {
-          DocViewerPanel.show(
-            context.extensionUri,
-            techContent,
-            nonTechContent,
-            repoName,
-          );
-        }
-
-        // Update sidebar status
-        sidebarProvider.updateStatus({
-          state: "done",
-          message: "Documentation generated!",
-          lastGenerated: new Date().toLocaleTimeString(),
-        });
-
-        // Show a success notification
-        const openAction = await vscode.window.showInformationMessage(
-          `Documentation generated for ${repoName}!`,
-          "View Docs",
-          "Open Folder",
-        );
-
-        if (openAction === "View Docs") {
-          DocViewerPanel.show(
-            context.extensionUri,
-            techContent,
-            nonTechContent,
-            repoName,
-          );
-        } else if (openAction === "Open Folder") {
-          vscode.commands.executeCommand(
-            "revealFileInOS",
-            vscode.Uri.file(fullOutputDir),
-          );
-        }
-      } catch (err: any) {
-        // Handle errors gracefully
-        outputChannel.appendLine(`ERROR: ${err.message}`);
-
-        sidebarProvider.updateStatus({
-          state: "error",
-          message: err.message?.substring(0, 100),
-        });
-
-        const action = await vscode.window.showErrorMessage(
-          `Doc generation failed: ${err.message}`,
-          "View Output",
-          "Retry",
-        );
-
-        if (action === "View Output") {
-          outputChannel.show();
-        } else if (action === "Retry") {
-          handleGenerateDocs(context, docType);
-        }
-      }
-    },
-  );
-}
-
-/**
- * Handle the "Show Repository Summary" command.
- *
- * This is a quick scan that does NOT call the LLM — it just reads the
- * file tree and shows basic statistics. Useful for a quick overview
- * or for verifying the scanner is working before spending money on LLM calls.
- */
-async function handleRepoSummary(): Promise<void> {
-  const workspaceFolder = getWorkspaceFolder();
-  if (!workspaceFolder) {
-    return;
-  }
-
-  await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: "Scanning repository...",
-      cancellable: false,
-    },
-    async () => {
-      try {
-        const result = await mcpClient.callTool("get_repo_summary", {
-          repo_path: workspaceFolder.uri.fsPath,
-        });
-
-        if (result.success) {
-          // Show the summary in an output channel (simple text)
-          outputChannel.appendLine("\n" + result.content);
-          outputChannel.show();
-
-          // Also show a quick notification
+        if (!diff.diffContent && diff.changedFiles.length === 0) {
           vscode.window.showInformationMessage(
-            `Repo scan complete! Check the Output panel for details.`,
-            "Show Output",
-          ).then((action) => {
-            if (action === "Show Output") {
-              outputChannel.show();
-            }
-          });
-        } else {
-          vscode.window.showErrorMessage(
-            `Scan failed: ${result.error}`,
+            `No changes found on branch "${diff.currentBranch}" compared to "${baseBranch}".`
           );
+          return;
+        }
+
+        outputChannel.appendLine(`Branch: ${diff.currentBranch} (${diff.changedFiles.length} files changed vs ${baseBranch})`);
+
+        // Step 2: Scan repo
+        progress.report({ message: `Step 2/5: Scanning repository structure... (${elapsed()}s)`, increment: 0 });
+        const repoContext = await scanRepo(repoPath);
+        progress.report({ message: `Step 2/5: Scanned ${repoContext.totalFiles} files across ${Object.keys(repoContext.languages).length} languages (${elapsed()}s)`, increment: 15 });
+
+        if (token.isCancellationRequested) {
+          vscode.window.showWarningMessage('Doc generation cancelled.');
+          return;
+        }
+
+        // Step 3: LLM generation (the slow step)
+        progress.report({ message: `Step 3/5: Generating docs with AI — this takes 30-60s... (${elapsed()}s)`, increment: 0 });
+        const apiKey = await secretStore.getApiKey(config.llm.provider as 'anthropic' | 'openai');
+        const provider = createProvider(config.llm.provider as any, {
+          apiKey: apiKey || undefined,
+          model: config.llm.model,
+          region: config.bedrock.region,
+          profile: config.bedrock.profile,
+        });
+
+        const docs = await generateDocs(provider, diff, repoContext);
+        progress.report({ message: `Step 3/5: AI generation complete (${elapsed()}s)`, increment: 50 });
+
+        if (token.isCancellationRequested) {
+          vscode.window.showWarningMessage('Doc generation cancelled.');
+          return;
+        }
+
+        // Step 4: Publish to Confluence
+        progress.report({ message: `Step 4/5: Publishing to Confluence... (${elapsed()}s)`, increment: 0 });
+        const cfgRaw = vscode.workspace.getConfiguration('repoDoc');
+        const confluenceToken = await secretStore.getConfluenceToken() || cfgRaw.get<string>('confluence.apiToken') || '';
+        const confluenceEmail = await secretStore.getConfluenceEmail() || cfgRaw.get<string>('confluence.email') || '';
+
+        if (!confluenceToken || !confluenceEmail) {
+          throw new Error('Confluence credentials not found. Run setup again.');
+        }
+
+        const publisher = new ConfluencePublisher({
+          baseUrl: config.confluence.baseUrl,
+          email: confluenceEmail,
+          apiToken: confluenceToken,
+          spaceKey: config.confluence.spaceKey,
+          parentPageId: config.confluence.parentPageId,
+        });
+
+        const existingPages = docTracker.getPages(diff.currentBranch);
+        const repoName = repoContext.name;
+        const techTitle = `${repoName} — ${diff.currentBranch} — Technical`;
+        const nonTechTitle = `${repoName} — ${diff.currentBranch} — Summary`;
+
+        let techResult;
+        let nonTechResult;
+
+        if (existingPages) {
+          const techVersion = await publisher.getPageVersion(existingPages.technicalPageId);
+          techResult = await publisher.updatePage(
+            existingPages.technicalPageId, techTitle, docs.technical, techVersion
+          );
+
+          const nonTechVersion = await publisher.getPageVersion(existingPages.nonTechnicalPageId);
+          nonTechResult = await publisher.updatePage(
+            existingPages.nonTechnicalPageId, nonTechTitle, docs.nonTechnical, nonTechVersion
+          );
+
+          outputChannel.appendLine(`Updated existing pages for branch: ${diff.currentBranch}`);
+        } else {
+          techResult = await publisher.createPage(techTitle, docs.technical);
+          nonTechResult = await publisher.createPage(nonTechTitle, docs.nonTechnical);
+
+          docTracker.setPages(diff.currentBranch, {
+            technicalPageId: techResult.pageId,
+            nonTechnicalPageId: nonTechResult.pageId,
+            lastUpdated: new Date().toISOString(),
+          });
+
+          outputChannel.appendLine(`Created new pages for branch: ${diff.currentBranch}`);
+        }
+
+        progress.report({ increment: 20 });
+
+        if (token.isCancellationRequested) {
+          vscode.window.showWarningMessage('Doc generation cancelled (pages may have been partially published).');
+          return;
+        }
+
+        // Step 5: Done
+        const totalTime = elapsed();
+        progress.report({ message: `Step 5/5: Done! Completed in ${totalTime}s`, increment: 5 });
+
+        outputChannel.appendLine(`Technical: ${techResult.url}`);
+        outputChannel.appendLine(`Non-Technical: ${nonTechResult.url}`);
+        outputChannel.appendLine(`Total time: ${totalTime}s`);
+
+        const action = await vscode.window.showInformationMessage(
+          `Docs ${existingPages ? 'updated' : 'published'} for "${diff.currentBranch}" in ${totalTime}s`,
+          'Open Technical',
+          'Open Summary'
+        );
+
+        if (action === 'Open Technical') {
+          vscode.env.openExternal(vscode.Uri.parse(techResult.url));
+        } else if (action === 'Open Summary') {
+          vscode.env.openExternal(vscode.Uri.parse(nonTechResult.url));
         }
       } catch (err: any) {
-        vscode.window.showErrorMessage(
-          `Scan error: ${err.message}`,
-        );
+        outputChannel.appendLine(`ERROR (after ${elapsed()}s): ${err.message}`);
+        outputChannel.show();
+        vscode.window.showErrorMessage(`Doc generation failed after ${elapsed()}s: ${err.message}`);
       }
-    },
-  );
-}
-
-/**
- * Handle the "View Last Generated Documentation" command.
- *
- * Reads previously generated docs from disk and displays them in the viewer.
- * This is useful when you want to re-open docs without regenerating them.
- */
-async function handleViewLastDoc(
-  context: vscode.ExtensionContext,
-): Promise<void> {
-  const workspaceFolder = getWorkspaceFolder();
-  if (!workspaceFolder) {
-    return;
-  }
-
-  const config = vscode.workspace.getConfiguration("repoDoc");
-  const outputDir = config.get<string>("output.directory") || "./docs/generated";
-  const repoPath = workspaceFolder.uri.fsPath;
-  const fullOutputDir = path.isAbsolute(outputDir)
-    ? outputDir
-    : path.join(repoPath, outputDir);
-
-  const techDocPath = path.join(fullOutputDir, "TECHNICAL_DOC.md");
-  const nonTechDocPath = path.join(fullOutputDir, "NON_TECHNICAL_GUIDE.md");
-
-  let techContent = "";
-  let nonTechContent = "";
-
-  if (fs.existsSync(techDocPath)) {
-    techContent = fs.readFileSync(techDocPath, "utf-8");
-  }
-  if (fs.existsSync(nonTechDocPath)) {
-    nonTechContent = fs.readFileSync(nonTechDocPath, "utf-8");
-  }
-
-  if (!techContent && !nonTechContent) {
-    const action = await vscode.window.showWarningMessage(
-      "No generated docs found. Generate documentation first?",
-      "Generate Now",
-    );
-    if (action === "Generate Now") {
-      handleGenerateDocs(context, "both");
     }
-    return;
-  }
-
-  DocViewerPanel.show(
-    context.extensionUri,
-    techContent,
-    nonTechContent,
-    workspaceFolder.name,
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────────────────────────────
+async function handleSetup(): Promise<void> {
+  await runSetupWizard(secretStore, extensionUri);
+}
 
-/**
- * Get the current workspace folder, showing an error if none is open.
- *
- * If multiple workspace folders are open (multi-root workspace),
- * we let the user pick which one to document.
- */
-function getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-  const folders = vscode.workspace.workspaceFolders;
+async function handleViewDocs(): Promise<void> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) return;
 
-  if (!folders || folders.length === 0) {
-    vscode.window.showErrorMessage(
-      "No workspace folder open. Open a repository folder first.",
+  const allTracked = docTracker.getAllTracked();
+  const branches = Object.keys(allTracked);
+
+  if (branches.length === 0) {
+    vscode.window.showInformationMessage('No docs generated yet. Click "Run" first.');
+    return;
+  }
+
+  const selected = await vscode.window.showQuickPick(branches, {
+    placeHolder: 'Select a branch to view its docs',
+  });
+
+  if (selected) {
+    const pages = allTracked[selected];
+    const config = getConfig();
+    const baseUrl = config.confluence.baseUrl;
+
+    const choice = await vscode.window.showQuickPick(
+      ['Technical Doc', 'Non-Technical Summary'],
+      { placeHolder: 'Which doc?' }
     );
-    return undefined;
-  }
 
-  // For single-folder workspaces, use it directly
-  if (folders.length === 1) {
-    return folders[0];
-  }
+    const pageId = choice === 'Technical Doc'
+      ? pages.technicalPageId
+      : pages.nonTechnicalPageId;
 
-  // For multi-root workspaces, we'd ideally show a quick pick.
-  // For now, use the first folder. (Enhancement for later.)
-  return folders[0];
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Branch Detection & Auto-Trigger
-// ──────────────────────────────────────────────────────────────────────
-
-/**
- * Detect the current git branch for a workspace.
- * Uses execFileSync (not exec) to avoid shell injection.
- * Returns empty string if git is unavailable or not a repo.
- */
-function detectBranch(repoPath: string): string {
-  try {
-    const result = cp.execFileSync(
-      "git",
-      ["rev-parse", "--abbrev-ref", "HEAD"],
-      { cwd: repoPath, timeout: 5000, encoding: "utf-8" },
+    vscode.env.openExternal(
+      vscode.Uri.parse(`${baseUrl}/pages/${pageId}`)
     );
-    return result.trim();
-  } catch {
-    return "";
   }
 }
 
-/**
- * Update the status bar item with the current doc state.
- */
-function updateStatusBar(
-  state: "idle" | "updating" | "done" | "error",
-  branch?: string,
-): void {
-  if (!statusBarItem) {
-    return;
-  }
-
-  const branchLabel = branch ? ` [${branch}]` : "";
-
-  switch (state) {
-    case "idle":
-      statusBarItem.text = `$(book) Docs${branchLabel}`;
-      statusBarItem.backgroundColor = undefined;
-      break;
-    case "updating":
-      statusBarItem.text = `$(sync~spin) Docs: updating...${branchLabel}`;
-      statusBarItem.backgroundColor = undefined;
-      break;
-    case "done":
-      statusBarItem.text = `$(check) Docs: updated${branchLabel}`;
-      statusBarItem.backgroundColor = undefined;
-      // Reset to idle after 10 seconds
-      setTimeout(() => updateStatusBar("idle", branch), 10000);
-      break;
-    case "error":
-      statusBarItem.text = `$(warning) Docs: error${branchLabel}`;
-      statusBarItem.backgroundColor = new vscode.ThemeColor(
-        "statusBarItem.warningBackground",
-      );
-      break;
-  }
-}
-
-/**
- * Handle auto-generation of branch docs when switching branches.
- */
-async function handleBranchDocsGeneration(
-  context: vscode.ExtensionContext,
-  branch: string,
-): Promise<void> {
-  const workspaceFolder = getWorkspaceFolder();
-  if (!workspaceFolder) {
-    return;
-  }
-
-  const repoPath = workspaceFolder.uri.fsPath;
-
-  outputChannel.appendLine(`Auto-generating branch docs for: ${branch}`);
-  updateStatusBar("updating", branch);
-
-  try {
-    const result = await mcpClient.callTool("generate_branch_docs", {
-      repo_path: repoPath,
-      branch: branch,
-    });
-
-    if (result.success) {
-      updateStatusBar("done", branch);
-      sidebarProvider.updateStatus({
-        state: "done",
-        message: `Branch docs generated for ${branch}`,
-        lastGenerated: new Date().toLocaleTimeString(),
-      });
-    } else {
-      updateStatusBar("error", branch);
-      outputChannel.appendLine(`Branch docs failed: ${result.error}`);
-    }
-  } catch (err: any) {
-    updateStatusBar("error", branch);
-    outputChannel.appendLine(`Branch docs error: ${err.message}`);
-  }
-}
-
-/**
- * Start a background watcher that periodically checks main branch for updates.
- */
-function startBackgroundWatcher(
-  context: vscode.ExtensionContext,
-  repoPath: string,
-  intervalMinutes: number,
-): void {
-  outputChannel.appendLine(
-    `Starting background watcher (every ${intervalMinutes} min)`,
-  );
-
-  const checkForUpdates = async () => {
-    try {
-      updateStatusBar("updating", currentBranch);
-      const result = await mcpClient.callTool("check_and_update_docs", {
-        repo_path: repoPath,
-      });
-
-      if (result.success && !result.content.includes("No new commits")) {
-        updateStatusBar("done", currentBranch);
-        vscode.window.showInformationMessage(
-          "Repo Doc: Main branch docs updated!",
-          "View Docs",
-        ).then((action) => {
-          if (action === "View Docs") {
-            vscode.commands.executeCommand("repoDoc.viewLastDoc");
-          }
-        });
-      } else {
-        updateStatusBar("idle", currentBranch);
-      }
-    } catch (err: any) {
-      outputChannel.appendLine(`Watcher error: ${err.message}`);
-      updateStatusBar("idle", currentBranch);
-    }
-  };
-
-  // Run first check after a short delay (let IDE finish loading)
-  setTimeout(checkForUpdates, 30000);
-
-  // Schedule periodic checks
-  watcherInterval = setInterval(
-    checkForUpdates,
-    intervalMinutes * 60 * 1000,
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Deactivation — cleanup when the extension is unloaded
-// ──────────────────────────────────────────────────────────────────────
-
-export function deactivate(): void {
-  if (watcherInterval) {
-    clearInterval(watcherInterval);
-  }
-  if (branchDebounceTimer) {
-    clearTimeout(branchDebounceTimer);
-  }
-  outputChannel?.appendLine("Repo Doc Generator extension deactivated");
-}
+export function deactivate(): void {}

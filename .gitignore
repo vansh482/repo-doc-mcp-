@@ -29,9 +29,6 @@ Thumbs.db
 vscode-extension/node_modules/
 vscode-extension/out/
 vscode-extension/*.vsix
-vscode-extension-ts/node_modules/
-vscode-extension-ts/out/
-vscode-extension-ts/*.vsix
 
 # IntelliJ plugin build
 intellij-plugin/build/

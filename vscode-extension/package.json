@@ -1,140 +1,59 @@
 {
   "name": "repo-doc-generator",
   "displayName": "Repo Doc Generator",
-  "description": "Generate comprehensive technical and non-technical documentation for your codebase using AI. Powered by MCP.",
+  "description": "Generate AI-powered branch documentation — see what your branch changed vs main, published to Confluence automatically.",
   "version": "0.1.0",
-  "publisher": "repo-doc-mcp",
+  "publisher": "vansh482",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vansh482/repo-doc-mcp-"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Other",
-    "Machine Learning",
-    "Programming Languages"
+    "Machine Learning"
   ],
   "keywords": [
     "documentation",
-    "mcp",
     "ai",
-    "code documentation",
-    "technical writing"
+    "confluence",
+    "branch",
+    "diff",
+    "code documentation"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:repoDoc.generateDocs",
-    "onCommand:repoDoc.generateTechnicalDoc",
-    "onCommand:repoDoc.generateNonTechnicalDoc",
-    "onCommand:repoDoc.showRepoSummary",
-    "onCommand:repoDoc.openSettings",
-    "onCommand:repoDoc.viewLastDoc"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "repoDoc.generateDocs",
-        "title": "Generate Documentation (Both)",
+        "command": "repoDoc.run",
+        "title": "Run — Generate Branch Docs",
         "category": "Repo Doc",
-        "icon": "$(book)"
+        "icon": "$(play)"
       },
       {
-        "command": "repoDoc.generateTechnicalDoc",
-        "title": "Generate Technical Documentation",
-        "category": "Repo Doc",
-        "icon": "$(code)"
-      },
-      {
-        "command": "repoDoc.generateNonTechnicalDoc",
-        "title": "Generate Non-Technical Guide",
-        "category": "Repo Doc",
-        "icon": "$(person)"
-      },
-      {
-        "command": "repoDoc.showRepoSummary",
-        "title": "Show Repository Summary",
-        "category": "Repo Doc",
-        "icon": "$(info)"
-      },
-      {
-        "command": "repoDoc.openSettings",
-        "title": "Open Settings",
+        "command": "repoDoc.setup",
+        "title": "Setup / Configure",
         "category": "Repo Doc",
         "icon": "$(gear)"
       },
       {
-        "command": "repoDoc.viewLastDoc",
-        "title": "View Last Generated Documentation",
+        "command": "repoDoc.viewDocs",
+        "title": "View Last Generated Docs",
         "category": "Repo Doc",
         "icon": "$(eye)"
       }
     ],
-    "configuration": {
-      "title": "Repo Doc Generator",
-      "properties": {
-        "repoDoc.mcpServerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Absolute path to the repo-doc-mcp server directory. If empty, the extension will look for the server in common locations."
-        },
-        "repoDoc.pythonPath": {
-          "type": "string",
-          "default": "python3",
-          "description": "Path to the Python interpreter to use for running the MCP server."
-        },
-        "repoDoc.llm.provider": {
-          "type": "string",
-          "enum": ["anthropic", "openai", "ollama"],
-          "default": "anthropic",
-          "description": "Which LLM provider to use for documentation generation."
-        },
-        "repoDoc.llm.model": {
-          "type": "string",
-          "default": "claude-sonnet-4-20250514",
-          "description": "The specific model to use (depends on provider). Examples: claude-sonnet-4-20250514, gpt-4o, llama3.1"
-        },
-        "repoDoc.llm.apiKey": {
-          "type": "string",
-          "default": "",
-          "description": "API key for the LLM provider. Leave empty to use environment variables (ANTHROPIC_API_KEY or OPENAI_API_KEY)."
-        },
-        "repoDoc.output.directory": {
-          "type": "string",
-          "default": "./docs/generated",
-          "description": "Directory where generated documentation will be saved (relative to workspace root)."
-        },
-        "repoDoc.output.includeArchitectureDiagram": {
-          "type": "boolean",
-          "default": true,
-          "description": "Include a Mermaid architecture diagram in the technical documentation."
-        },
-        "repoDoc.autoOpen": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically open generated docs in the built-in viewer after generation."
-        },
-        "repoDoc.watcher.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable background watcher that monitors main branch and auto-updates docs."
-        },
-        "repoDoc.watcher.intervalMinutes": {
-          "type": "number",
-          "default": 5,
-          "description": "How often (in minutes) the background watcher checks for main branch changes."
-        },
-        "repoDoc.watcher.autoGenerateBranchDocs": {
-          "type": "boolean",
-          "default": false,
-          "description": "Automatically generate branch-specific docs when switching git branches."
-        }
-      }
-    },
     "viewsContainers": {
       "activitybar": [
         {
           "id": "repoDoc",
-          "title": "Repo Documentation",
+          "title": "Repo Doc",
           "icon": "$(book)"
         }
       ]
@@ -142,65 +61,109 @@
     "views": {
       "repoDoc": [
         {
-          "id": "repoDocActions",
-          "name": "Actions",
+          "id": "repoDocSidebar",
+          "name": "Repo Doc Generator",
           "type": "webview"
         }
       ]
     },
-    "menus": {
-      "explorer/context": [
-        {
-          "command": "repoDoc.generateDocs",
-          "group": "navigation",
-          "when": "explorerResourceIsFolder"
+    "configuration": {
+      "title": "Repo Doc Generator",
+      "properties": {
+        "repoDoc.llm.provider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai",
+            "bedrock"
+          ],
+          "default": "anthropic",
+          "description": "LLM provider for doc generation."
+        },
+        "repoDoc.llm.model": {
+          "type": "string",
+          "default": "claude-sonnet-4-20250514",
+          "description": "Model ID. Examples: claude-sonnet-4-20250514, gpt-4o, us.anthropic.claude-sonnet-4-20250514-v1:0"
+        },
+        "repoDoc.confluence.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Your Confluence base URL (e.g., https://yourcompany.atlassian.net/wiki)"
+        },
+        "repoDoc.confluence.spaceKey": {
+          "type": "string",
+          "default": "",
+          "description": "Confluence space key where docs will be published."
+        },
+        "repoDoc.confluence.parentPageId": {
+          "type": "string",
+          "default": "",
+          "description": "ID of the parent page under which branch docs will be created."
+        },
+        "repoDoc.baseBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "The base branch to compare against (main, master, or mainline)."
+        },
+        "repoDoc.bedrock.region": {
+          "type": "string",
+          "default": "us-west-2",
+          "description": "AWS region for Bedrock (only used when provider is bedrock)."
+        },
+        "repoDoc.bedrock.profile": {
+          "type": "string",
+          "default": "",
+          "description": "AWS profile name for Bedrock authentication (uses SSO/IAM)."
+        },
+        "repoDoc.confluence.email": {
+          "type": "string",
+          "default": "",
+          "description": "Atlassian account email for Confluence authentication."
+        },
+        "repoDoc.confluence.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "Confluence API token (from id.atlassian.com/manage-profile/security/api-tokens)."
         }
-      ],
-      "commandPalette": [
-        {
-          "command": "repoDoc.generateDocs",
-          "when": "workspaceFolderCount > 0"
-        },
-        {
-          "command": "repoDoc.generateTechnicalDoc",
-          "when": "workspaceFolderCount > 0"
-        },
-        {
-          "command": "repoDoc.generateNonTechnicalDoc",
-          "when": "workspaceFolderCount > 0"
-        },
-        {
-          "command": "repoDoc.showRepoSummary",
-          "when": "workspaceFolderCount > 0"
-        }
-      ]
+      }
     },
     "keybindings": [
       {
-        "command": "repoDoc.generateDocs",
-        "key": "ctrl+shift+d",
-        "mac": "cmd+shift+d",
+        "command": "repoDoc.run",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
         "when": "workspaceFolderCount > 0"
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "repoDoc.run",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile",
-    "test": "node ./out/test/runTest.js",
     "lint": "eslint src --ext ts",
     "package": "vsce package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
-    "typescript": "^5.3.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
     "@vscode/vsce": "^2.22.0",
     "eslint": "^8.56.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0"
+    "typescript": "^5.3.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.400.0",
+    "@aws-sdk/credential-providers": "^3.1113.0",
+    "openai": "^4.20.0"
+  }
 }
