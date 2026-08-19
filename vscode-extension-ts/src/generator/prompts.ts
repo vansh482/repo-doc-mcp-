@@ -1,108 +1,91 @@
 import type { BranchDiff } from '../git/diff';
 import type { RepoContext } from '../scanner/scanner';
 
-export const SYSTEM_PROMPT = `You are a senior technical writer specializing in software documentation. You produce clear, structured, and actionable documentation from code changes. Your output is always in Markdown format with proper headings, lists, and code blocks. Be specific — reference actual file names, function names, and architectural patterns. Never pad with generic filler.`;
+export const SYSTEM_PROMPT = `You are a senior engineer writing documentation for code review. Be concise — every sentence must earn its place. Focus on WHY, not WHAT: the diff already shows what changed. Group changes by purpose, not by file. Never pad with filler or repeat information.`;
 
 export function buildTechnicalPrompt(diff: BranchDiff, context: RepoContext): string {
   const languageBreakdown = Object.entries(context.languages)
     .sort(([, a], [, b]) => b - a)
-    .map(([lang, count]) => `  - ${lang}: ${count} files`)
-    .join('\n');
+    .slice(0, 5)
+    .map(([lang, count]) => `${lang} (${count})`)
+    .join(', ');
 
-  return `Generate a **Technical Documentation** page for the changes in branch \`${diff.currentBranch}\` compared to \`${diff.baseBranch}\`.
+  return `Write a **Technical Review Doc** for branch \`${diff.currentBranch}\` (vs \`${diff.baseBranch}\`).
 
-## Repository Context
-
-- **Project:** ${context.name}
-- **Total files:** ${context.totalFiles} (${context.totalLines} lines)
-- **Languages:**
-${languageBreakdown}
-- **Key files:** ${context.keyFiles.join(', ')}
-- **Structure:**
-\`\`\`
-${context.structure}
-\`\`\`
-
-## Branch Changes
-
-**Changed files (${diff.changedFiles.length}):**
-${diff.changedFiles.map(f => `- ${f}`).join('\n')}
-
-**Commit messages:**
-${diff.commitMessages.map(m => `- ${m}`).join('\n')}
-
-**Diff summary:**
-${diff.diffSummary}
-
-**Full diff:**
-\`\`\`diff
-${diff.diffContent}
-\`\`\`
-
-## Required Sections
-
-Write the documentation with these sections:
-
-### 1. Summary
-What does this branch do? One paragraph overview.
-
-### 2. Files Changed
-For each changed file, explain what was modified and why it matters.
-
-### 3. Architecture & Data Flow Impact
-How do these changes affect the system's architecture or data flow? Include a mermaid diagram if the changes are structural.
-
-### 4. API Changes
-List any new, modified, or removed endpoints/interfaces/contracts. If none, state "No API changes."
-
-### 5. Testing Considerations
-What should be tested? What edge cases exist? What regression risks are there?
-
-### 6. Deployment Notes
-Any migration steps, environment variable changes, feature flags, or rollback considerations.`;
-}
-
-export function buildNonTechnicalPrompt(diff: BranchDiff, context: RepoContext): string {
-  return `Generate a **Non-Technical Summary** of the changes in branch \`${diff.currentBranch}\` compared to \`${diff.baseBranch}\`.
-
-This document is for product managers, leadership, and non-engineering stakeholders. Use plain English, no jargon, and explain with analogies where helpful.
+Target audience: a senior engineer doing code review.
+Target length: 500-800 words. Do NOT exceed this.
+Do NOT list every file individually. Group changes by purpose/area.
+Focus on WHY decisions were made, not just WHAT code changed.
 
 ## Context
 
-- **Project:** ${context.name}
-- **Branch:** ${diff.currentBranch}
-- **Files changed:** ${diff.changedFiles.length}
+- **Project:** ${context.name} (${context.totalFiles} files, ${languageBreakdown})
+- **Changed files:** ${diff.changedFiles.length}
+- **Commits:** ${diff.commitMessages.length}
 
 **Commit messages:**
 ${diff.commitMessages.map(m => `- ${m}`).join('\n')}
 
 **Changed files:**
-${diff.changedFiles.map(f => `- ${f}`).join('\n')}
+${diff.changedFiles.join(', ')}
 
-**Diff summary:**
-${diff.diffSummary}
-
-**Full diff:**
+**Diff:**
 \`\`\`diff
 ${diff.diffContent}
 \`\`\`
 
-## Required Sections
+## Required Sections (use exactly these headings)
 
-Write the summary with these sections:
+### What & Why
+2-3 sentences: what this branch does and the motivation behind it.
 
-### 1. What's Changing (Plain English)
-Explain what this branch does as if talking to someone with no coding background. Use analogies.
+### Key Changes
+Group changes by area/concern (e.g., "Auth flow", "Database layer", "API surface"). For each group, explain what changed and WHY that approach was chosen. Skip trivial changes (gitignore, formatting). Use bullet points.
 
-### 2. What Problem Does This Solve?
-Why is this work being done? What was broken or missing before?
+### Design Decisions
+What tradeoffs were made? What alternatives were considered and rejected? What constraints shaped the approach? These are the things not obvious from reading the diff.
 
-### 3. User-Facing Impact
-Will users notice anything different? Is this a visible change or behind-the-scenes?
+### How to Test
+Concrete steps someone can follow to verify this works. Include setup steps if needed, specific commands to run, and what success looks like.
 
-### 4. Risks & Considerations
-What could go wrong? What should stakeholders be aware of?
+### Risks & Rollback
+What could break? What's the blast radius? How to revert if something goes wrong? Any dependencies on external systems?`;
+}
 
-### 5. Effort & Scope
-How big is this change? (Small tweak, medium feature, large restructure)`;
+export function buildNonTechnicalPrompt(diff: BranchDiff, context: RepoContext): string {
+  return `Write a **Non-Technical Summary** of branch \`${diff.currentBranch}\` for product managers and stakeholders.
+
+Target audience: a product manager checking in on progress.
+Target length: 200-400 words. Do NOT exceed this.
+Use plain English. No jargon, no code references, no file names.
+Use analogies where they help.
+
+## Context
+
+- **Project:** ${context.name}
+- **Branch:** ${diff.currentBranch}
+- **Size:** ${diff.changedFiles.length} files changed, ${diff.commitMessages.length} commits
+
+**Commit messages:**
+${diff.commitMessages.map(m => `- ${m}`).join('\n')}
+
+**Changed files:**
+${diff.changedFiles.join(', ')}
+
+**Diff summary:**
+${diff.diffSummary}
+
+## Required Sections (use exactly these headings)
+
+### What's Happening
+One paragraph explaining what this work does. No technical terms — explain it like you're talking to a smart person who doesn't code.
+
+### Why It Matters
+Business impact. What does this enable? What problem goes away? What becomes possible that wasn't before?
+
+### What to Expect
+When will this land? Are there user-facing changes? Will anyone notice anything different? What's the rollout plan?
+
+### Open Questions
+Things that still need decision or input from stakeholders. If there are none, say "None — this is self-contained."`;
 }

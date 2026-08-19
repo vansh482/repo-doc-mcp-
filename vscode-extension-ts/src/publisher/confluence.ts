@@ -108,15 +108,63 @@ export class ConfluencePublisher {
 function markdownToConfluenceStorage(markdown: string): string {
   let html = markdown;
 
-  // Code blocks → Confluence code macro
+  // Mermaid code blocks → Confluence expand macro with raw text
+  html = html.replace(/```mermaid\n([\s\S]*?)```/g, (_match, diagram) => {
+    const escaped = escapeXml(diagram.trimEnd());
+    return `<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">Mermaid Diagram (paste into mermaid.live to view)</ac:parameter><ac:rich-text-body><ac:structured-macro ac:name="code"><ac:parameter ac:name="language">none</ac:parameter><ac:plain-text-body><![CDATA[${escaped}]]></ac:plain-text-body></ac:structured-macro></ac:rich-text-body></ac:structured-macro>`;
+  });
+
+  // Regular code blocks → Confluence code macro
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
     const language = lang || 'none';
     const escaped = escapeXml(code.trimEnd());
     return `<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">${language}</ac:parameter><ac:plain-text-body><![CDATA[${escaped}]]></ac:plain-text-body></ac:structured-macro>`;
   });
 
-  // Inline code
+  // Tables
+  html = html.replace(/((?:\|[^\n]+\|\n)+)/g, (tableBlock) => {
+    const rows = tableBlock.trim().split('\n');
+    const isSeparator = (row: string) => /^\|[\s\-:|]+\|$/.test(row);
+
+    let tableHtml = '<table><tbody>';
+    let isHeader = true;
+
+    for (const row of rows) {
+      if (isSeparator(row)) {
+        isHeader = false;
+        continue;
+      }
+
+      const cells = row
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map(c => c.trim());
+
+      const tag = isHeader ? 'th' : 'td';
+      tableHtml += '<tr>';
+      for (const cell of cells) {
+        tableHtml += `<${tag}>${cell}</${tag}>`;
+      }
+      tableHtml += '</tr>';
+
+      if (isHeader && rows.length > 1 && !isSeparator(rows[1])) {
+        isHeader = false;
+      }
+    }
+
+    tableHtml += '</tbody></table>';
+    return tableHtml;
+  });
+
+  // Horizontal rules
+  html = html.replace(/^---+$/gm, '<hr />');
+
+  // Inline code (before links to avoid conflicts)
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
   // Headers
   html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -128,17 +176,61 @@ function markdownToConfluenceStorage(markdown: string): string {
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-  // Unordered lists
-  html = html.replace(/^(\s*)- (.+)$/gm, '$1<li>$2</li>');
-  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // Ordered lists (must come before unordered)
+  html = html.replace(/((?:^\d+\. .+\n?)+)/gm, (block) => {
+    const items = block.trim().split('\n').map(line =>
+      `<li>${line.replace(/^\d+\.\s+/, '')}</li>`
+    );
+    return `<ol>${items.join('')}</ol>`;
+  });
+
+  // Unordered lists (handle nesting with indentation)
+  html = html.replace(/((?:^[\t ]*- .+\n?)+)/gm, (block) => {
+    return convertNestedList(block.trim());
+  });
 
   // Paragraphs: lines that aren't already wrapped in HTML tags
-  html = html.replace(/^(?!<[a-z/])(.+)$/gm, '<p>$1</p>');
+  html = html.replace(/^(?!<[a-z/!])(.+)$/gm, '<p>$1</p>');
 
-  // Clean up empty paragraphs
+  // Clean up empty paragraphs and extra whitespace
   html = html.replace(/<p>\s*<\/p>/g, '');
+  html = html.replace(/\n{2,}/g, '\n');
 
   return html;
+}
+
+function convertNestedList(block: string): string {
+  const lines = block.split('\n');
+  let result = '<ul>';
+  let currentDepth = 0;
+
+  for (const line of lines) {
+    const match = line.match(/^([\t ]*)- (.+)$/);
+    if (!match) continue;
+
+    const indent = match[1].length;
+    const content = match[2];
+    const depth = indent >= 4 ? 2 : indent >= 2 ? 1 : 0;
+
+    while (depth > currentDepth) {
+      result += '<ul>';
+      currentDepth++;
+    }
+    while (depth < currentDepth) {
+      result += '</li></ul>';
+      currentDepth--;
+    }
+
+    result += `<li>${content}`;
+  }
+
+  while (currentDepth > 0) {
+    result += '</li></ul>';
+    currentDepth--;
+  }
+  result += '</li></ul>';
+
+  return result;
 }
 
 function escapeXml(str: string): string {
