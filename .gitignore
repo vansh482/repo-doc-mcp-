@@ -1,20 +1,6 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-venv/
-*.egg-info/
-dist/
-build/
-
-# Config with secrets (use .example.yaml as template)
+# Local secrets (API keys, tokens — never push)
+.local-secrets/
 repo-doc-mcp.yaml
-
-# Generated docs (output of the tool)
-docs/generated/
-docs/test-run/
-docs/test-run-v2/
 
 # IDE
 .idea/
@@ -29,16 +15,6 @@ Thumbs.db
 vscode-extension/node_modules/
 vscode-extension/out/
 vscode-extension/*.vsix
-
-# IntelliJ plugin build
-intellij-plugin/build/
-intellij-plugin/.gradle/
-
-# Test artifacts
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
 
 # State files
 .repo-doc-state.json
