@@ -93,9 +93,38 @@ src/
 2. Click "..." → "Page Information"
 3. The page ID is in the URL: `.../pages/viewinfo.action?pageId=12345`
 
-## Security
+## Security & Data Flow
 
-- All credentials in OS keychain (SecretStorage) — never in settings.json
+**This extension is a pipe, not a platform.** Your code goes directly from your machine to the APIs you configure — no middleman, no data passes through any server we control.
+
+```
+Your machine (git diff)  ──►  LLM API (your creds)  ──►  back to your machine  ──►  Confluence (your instance)
+```
+
+### What we do NOT do
+
+- No intermediary server — zero network calls except to APIs you explicitly configured
+- No telemetry that captures code content
+- No persistent storage of diffs or generated docs on disk
+- No "phone home", analytics, or usage tracking
+
+### Who owns what
+
+| Concern | Owner | Details |
+|---------|-------|---------|
+| Code sent to LLM | **You** | You chose the provider and entered your own API key |
+| LLM data retention | **Your LLM provider** | Anthropic/OpenAI API: don't train on API data. Bedrock: stays in your AWS account |
+| Docs in Confluence | **You** | Your instance, your space, your credentials |
+| API keys at rest | **VS Code SecretStorage** | OS-level encryption (Keychain on macOS, Credential Manager on Windows, libsecret on Linux) |
+
+### For maximum data isolation: use AWS Bedrock
+
+With Bedrock, your code never leaves your own AWS account. The LLM call is made within your VPC boundary. This is the recommended option for enterprise teams with strict data residency requirements.
+
+### Code-level safety
+
+- All credentials in OS keychain (SecretStorage) — never in plaintext settings.json
 - Publishes only to your configured space + parent page
 - Git commands use `execFile` (immune to shell injection)
 - No telemetry or external reporting
+- No third-party dependencies that phone home
