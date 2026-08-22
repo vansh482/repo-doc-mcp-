@@ -3,12 +3,13 @@
   "displayName": "Repo Doc Generator",
   "description": "Generate AI-powered branch documentation — see what your branch changed vs main, published to Confluence automatically.",
   "version": "0.1.0",
-  "publisher": "vansh482",
+  "publisher": "devcraft-tools",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/vansh482/repo-doc-mcp-"
   },
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -47,6 +48,12 @@
         "title": "View Last Generated Docs",
         "category": "Repo Doc",
         "icon": "$(eye)"
+      },
+      {
+        "command": "repoDoc.cancel",
+        "title": "Cancel Generation",
+        "category": "Repo Doc",
+        "icon": "$(stop)"
       }
     ],
     "viewsContainers": {
@@ -115,15 +122,11 @@
           "default": "",
           "description": "AWS profile name for Bedrock authentication (uses SSO/IAM)."
         },
-        "repoDoc.confluence.email": {
+        "repoDoc.docLength": {
           "type": "string",
-          "default": "",
-          "description": "Atlassian account email for Confluence authentication."
-        },
-        "repoDoc.confluence.apiToken": {
-          "type": "string",
-          "default": "",
-          "description": "Confluence API token (from id.atlassian.com/manage-profile/security/api-tokens)."
+          "enum": ["concise", "standard", "detailed"],
+          "default": "concise",
+          "description": "Doc verbosity: concise (~500 words), standard (~1000 words), detailed (~2000 words)."
         }
       }
     },

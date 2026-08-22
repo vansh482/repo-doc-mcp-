@@ -141,6 +141,40 @@ Having two extension folders was confusing. The old prototype is fully supersede
 
 ---
 
+## 2026-08-20 — Legacy Cleanup
+
+### Changes
+- Removed entire Python backend (`src/`, `tests/`, `pyproject.toml`, `requirements.txt`)
+- Removed IntelliJ plugin (`intellij-plugin/`)
+- Removed legacy docs (`docs/`, `PROJECT_GUIDE.md`, `TESTING.md`, `repo-doc-mcp.example.yaml`)
+- Moved `repo-doc-mcp.yaml` (contains real API keys) to `.local-secrets/` (gitignored)
+- Cleaned up `.gitignore` — removed Python/IntelliJ rules, added `.local-secrets/`
+- Added `TODO.md` with comprehensive future roadmap
+- Updated root `README.md` with current state and visual elements
+- Removed stray root-level `package-lock.json`
+
+### Why
+The Python backend, IntelliJ plugin, and MCP server are fully superseded by the TypeScript VS Code extension. Keeping them around was confusing (gave the impression they were active code) and added noise to the repo. The extension is self-contained — all functionality lives in `vscode-extension/`.
+
+### What's Left in the Repo
+```
+repo-doc-mcp/
+├── .gitignore
+├── README.md                    ← Project overview (points to extension)
+└── vscode-extension/            ← The entire product
+    ├── src/                     ← All source code
+    ├── package.json             ← Extension manifest
+    ├── tsconfig.json            ← TypeScript config
+    ├── HISTORY.md               ← This file
+    ├── TODO.md                  ← Future roadmap
+    └── README.md                ← Developer docs
+```
+
+### Local-only (not in git)
+- `.local-secrets/repo-doc-mcp.yaml` — Contains real API keys for local testing
+
+---
+
 ## How to Continue This Project
 
 1. Read this file for context

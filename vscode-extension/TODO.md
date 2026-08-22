@@ -93,14 +93,25 @@ All possible improvements, features, and enhancements. Organized by priority and
 
 ---
 
+## Observability & Error Monitoring
+
+- [ ] **Telemetry (Application Insights)** — Use `@vscode/extension-telemetry` (Microsoft's official package). Respects user's telemetry settings. Free tier: 5GB/month. Shows: errors, event counts, performance.
+- [ ] **Sentry integration** — Real-time error alerts, stack traces, number of users affected. Better UX for debugging than App Insights. Free tier: 5K events/month.
+- [ ] **Simple webhook on error** — POST error details (message, step, elapsed time) to a Slack/Discord webhook. Lowest effort, no SDK needed.
+- [ ] **In-extension error report button** — After an error, show "Report Issue" button that opens a pre-filled GitHub issue with sanitized error context.
+- [ ] **Usage analytics** — Track: which LLM provider used, generation time, doc length, success/fail rate. Helps prioritize improvements.
+
+### Current Error Handling (v0.1.0)
+Errors are logged to VS Code Output Channel ("Repo Doc Generator"). Users must manually copy logs if reporting bugs. No publisher-side visibility.
+
+---
+
 ## Tech Debt & Housekeeping
 
-- [ ] **Remove unused sidebar webview registration** — Or implement it properly
 - [ ] **Strict TypeScript** — Enable strict mode, fix any resulting errors
 - [ ] **Bundle with esbuild** — Reduce extension size and load time (currently just tsc)
 - [ ] **CI/CD pipeline** — GitHub Actions for lint, test, package, publish
 - [ ] **Changelog** — Maintain CHANGELOG.md following Keep a Changelog format
-- [ ] **Extension icon** — Design and add a proper marketplace icon
 - [ ] **Screenshots for marketplace** — Generate demo screenshots/GIFs for the listing
 
 ---
@@ -119,3 +130,10 @@ All possible improvements, features, and enhancements. Organized by priority and
 - [x] SecretStorage for credentials
 - [x] Settings.json fallback for testing
 - [x] Personal space security constraint
+- [x] Sidebar panel with Run button, live status, progress bar, cancel, result links
+- [x] Extension icon (128x128 PNG)
+- [x] .vscodeignore for smaller package (1.78 MB)
+- [x] LICENSE (MIT)
+- [x] VS Code Marketplace publishing (devcraft-tools.repo-doc-generator)
+- [x] Legacy code cleanup (removed Python, IntelliJ, dead docs)
+- [x] Publisher account setup (DevCraft Tools)
