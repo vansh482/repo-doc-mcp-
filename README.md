@@ -1,37 +1,41 @@
 <div align="center">
 
-# 🚀 Repo Doc Generator
-
-### AI-Powered Documentation That Never Goes Stale
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=28&duration=3000&pause=1000&color=6C63FF&center=true&vCenter=true&multiline=true&repeat=true&width=600&height=80&lines=Repo+Doc+Generator;AI-Powered+Branch+Documentation" alt="Typing SVG" />
 
 <br/>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vansh482/repo-doc-mcp-/main/.github/assets/flow-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/vansh482/repo-doc-mcp-/main/.github/assets/flow-light.svg">
+  <img alt="Data Flow" width="650">
+</picture>
 
 ```
- ┌─────────────────────────────────────────────────────────────┐
- │                                                             │
- │   📂 Your Code  ──→  🧠 AI Analysis  ──→  📄 Live Docs    │
- │                                                             │
- │   Scans repo         Understands        Auto-publishes      │
- │   structure          architecture       to Confluence        │
- │                                         & Google Docs        │
- └─────────────────────────────────────────────────────────────┘
+     ╔══════════════╗         ╔══════════════╗         ╔══════════════╗
+     ║   GIT DIFF   ║────────▶║    AI LLM    ║────────▶║  CONFLUENCE  ║
+     ║              ║         ║              ║         ║              ║
+     ║ branch vs    ║         ║ understands  ║         ║ auto-publish ║
+     ║ main/master  ║         ║ & explains   ║         ║ & update     ║
+     ╚══════════════╝         ╚══════════════╝         ╚══════════════╝
+            │                        │                        │
+            ▼                        ▼                        ▼
+     What changed?            Why it matters          Living docs
 ```
 
 <br/>
 
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-VS_Code-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Kotlin](https://img.shields.io/badge/Kotlin-IntelliJ-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
-[![Claude](https://img.shields.io/badge/Claude-Anthropic-D97757?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PC9zdmc+&logoColor=white)](https://anthropic.com)
-[![MCP](https://img.shields.io/badge/MCP-Protocol-000000?style=for-the-badge)](https://modelcontextprotocol.io)
+[![VS Code](https://img.shields.io/badge/VS_Code-Extension-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-100%25-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Zero Dependencies](https://img.shields.io/badge/External_Deps-Zero-success?style=for-the-badge)](#)
+[![Confluence](https://img.shields.io/badge/Confluence-Auto_Publish-172B4D?style=for-the-badge&logo=confluence&logoColor=white)](https://www.atlassian.com/software/confluence)
 
 <br/>
 
-**Stop writing docs manually. Let AI keep them alive.**
+**One click. Two docs. Always in sync.**
 
-[Get Started](#-quick-start) · [Features](#-features) · [How It Works](#-how-it-works) · [IDE Extensions](#-ide-extensions) · [Publishing](#-publishing)
+Your branch changes → explained for engineers AND stakeholders → published to Confluence.
 
-<br/>
+[Install](#-install) · [How It Works](#-how-it-works) · [Features](#-features) · [Roadmap](#-roadmap) · [Develop](#-development)
 
 ---
 
@@ -39,85 +43,103 @@
 
 <br/>
 
-## 🎬 Demo
+## The Problem
+
+You finish a feature branch. Now you need to:
+1. Write a technical doc explaining the changes
+2. Write a non-technical summary for PMs/stakeholders
+3. Publish both somewhere findable
+4. Update them when the branch changes
+
+**That's 30-60 minutes of context-switching per branch.** This extension does it in 30 seconds.
+
+<br/>
+
+## How It Works
 
 ```
-$ repo-doc generate ./my-project
-
-📂 Scanning repository...
-   Found 142 files, 28,439 lines across 6 languages
-
-🔍 Analyzing architecture...
-   Detected: FastAPI + SQLAlchemy + React frontend
-   Key patterns: Repository pattern, Event sourcing
-
-📝 Generating documentation...
-   ✅ Technical Documentation    (12,847 words)
-   ✅ Non-Technical Guide        (4,231 words)
-   ✅ Architecture Diagram       (Mermaid)
-
-☁️  Publishing to Confluence...
-   ✅ Technical Doc  → https://wiki.company.com/pages/12345
-   ✅ Project Guide  → https://wiki.company.com/pages/12346
-
-🎉 Done in 2m 34s
+  You click "Run" (Cmd+Shift+G)
+       │
+       │  ┌─────────────────────────────────────────────────────────────┐
+       ├──│ Step 1/5  Detecting branch & computing diff vs main...     │
+       │  └─────────────────────────────────────────────────────────────┘
+       │  ┌─────────────────────────────────────────────────────────────┐
+       ├──│ Step 2/5  Scanning repo structure (languages, key files)    │
+       │  └─────────────────────────────────────────────────────────────┘
+       │  ┌─────────────────────────────────────────────────────────────┐
+       ├──│ Step 3/5  Generating docs with AI (30-60s)                  │
+       │  └─────────────────────────────────────────────────────────────┘
+       │  ┌─────────────────────────────────────────────────────────────┐
+       ├──│ Step 4/5  Publishing to Confluence...                       │
+       │  └─────────────────────────────────────────────────────────────┘
+       │  ┌─────────────────────────────────────────────────────────────┐
+       └──│ Step 5/5  Done! Pages created/updated.                      │
+          └─────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  Two Confluence pages — always current with your branch
 ```
 
 <br/>
 
-## ✨ Features
+## Features
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-### 🧠 AI-Powered Understanding
-Not just file listing — actually **understands** your code. Identifies patterns, traces data flow, maps dependencies, and explains architectural decisions.
+### Branch-Aware Diff Docs
 
-</td>
-<td width="50%">
-
-### 📄 Dual Documentation
-Generates **two docs** from one scan:
-- **Technical** → For engineers (architecture, APIs, data flow)
-- **Non-Technical** → For PMs & leadership (plain English, analogies)
+Compares your current branch against `main`/`master`/`mainline` using three-dot diff. Only documents what YOUR branch changed — not the entire repo history.
 
 </td>
-</tr>
-<tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-### 🔄 Auto-Updates
-Watches your main branch. When code changes, docs update automatically. Uses smart 3-tier detection:
-- `Cosmetic` → Skip (comments, formatting)
-- `Content` → Partial regen (modified functions)
-- `Structural` → Full regen (new modules)
+### Dual-Audience Output
 
-</td>
-<td width="50%">
-
-### 🌿 Branch-Aware Docs
-Each feature branch gets its own documentation showing **what changed vs main**. Auto-cleaned when merged.
-
-```
-main        → "MyApp — Technical Docs"
-feature/auth → "MyApp — feature/auth Docs"
-                (includes diff summary)
-```
+Every run produces two docs:
+- **Technical Review** — for engineers (architecture decisions, risks, how to test)
+- **Non-Technical Summary** — for PMs (what, why, impact in plain language)
 
 </td>
 </tr>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-### 🔌 IDE Integration
-Works where you work — VS Code sidebar and IntelliJ tool window. One-click doc generation without leaving your editor.
+### Update, Never Duplicate
+
+Run it 10 times on the same branch — same two Confluence pages get updated (version incremented). Branch-to-page tracking is automatic.
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
-### ☁️ Auto-Publish
-Pushes docs to **Confluence** and **Google Docs** automatically. Your wiki stays current without anyone lifting a finger.
+### Multi-Provider LLM
+
+Works with your existing AI provider:
+- **Anthropic Claude** (API key)
+- **OpenAI GPT-4** (API key)
+- **AWS Bedrock** (IAM/SSO — no key needed)
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Secure by Design
+
+- API keys in OS keychain (VS Code SecretStorage)
+- Publishes only to YOUR configured personal space
+- No telemetry, no external calls except your LLM + Confluence
+
+</td>
+<td width="50%" valign="top">
+
+### Real-Time Progress
+
+Step-by-step progress indicator with:
+- Current step (1/5 through 5/5)
+- Elapsed time counter
+- Cancel button to abort at any point
 
 </td>
 </tr>
@@ -125,261 +147,194 @@ Pushes docs to **Confluence** and **Google Docs** automatically. Your wiki stays
 
 <br/>
 
-## 🏗 How It Works
+## Install
+
+### From VS Code Marketplace (coming soon)
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                           REPO DOC GENERATOR                             │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌──────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────┐  │
-│  │          │    │              │    │              │    │          │  │
-│  │ SCANNER  │───▶│   ANALYZER   │───▶│  GENERATOR   │───▶│ PUBLISHER│  │
-│  │          │    │              │    │              │    │          │  │
-│  │ Walks    │    │ Regex +      │    │ Per-section  │    │ Conflu-  │  │
-│  │ file tree│    │ LLM-powered  │    │ LLM calls    │    │ ence &   │  │
-│  │ 65+ langs│    │ understanding│    │ for depth    │    │ GDocs    │  │
-│  │          │    │              │    │              │    │          │  │
-│  └──────────┘    └──────────────┘    └──────────────┘    └──────────┘  │
-│       │                                                       │          │
-│       │              ┌──────────────┐                         │          │
-│       └─────────────▶│   WATCHER    │◀────────────────────────┘          │
-│                      │              │                                    │
-│                      │ Polls branch │                                    │
-│                      │ Detects diffs│                                    │
-│                      │ Triggers     │                                    │
-│                      │ regen        │                                    │
-│                      └──────────────┘                                    │
-│                                                                          │
-├──────────────────────────────────────────────────────────────────────────┤
-│  LLM PROVIDERS:  Anthropic │ OpenAI │ AWS Bedrock │ Ollama (local)      │
-├──────────────────────────────────────────────────────────────────────────┤
-│  IDE EXTENSIONS: VS Code │ IntelliJ/JetBrains                           │
-└──────────────────────────────────────────────────────────────────────────┘
+ext install vansh482.repo-doc-generator
 ```
 
-<br/>
-
-## ⚡ Quick Start
-
-### CLI (No IDE needed)
+### From Source (now)
 
 ```bash
-# Clone & setup
 git clone https://github.com/vansh482/repo-doc-mcp-.git
-cd repo-doc-mcp-
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-
-# Copy config
-cp repo-doc-mcp.example.yaml repo-doc-mcp.yaml
-# Edit repo-doc-mcp.yaml with your LLM API key
-
-# Generate docs for any repo
-python -m src.cli /path/to/any/repo --type both
-
-# Just scan (no LLM needed)
-python -m src.cli /path/to/any/repo --summary-only
-```
-
-### With AWS Bedrock (No API key needed — uses SSO)
-
-```bash
-AWS_PROFILE=your-profile AWS_REGION=us-west-2 \
-python -m src.cli /path/to/repo \
-  --provider bedrock \
-  --model "arn:aws:bedrock:us-west-2:ACCOUNT:inference-profile/ID"
-```
-
-### Publish to Confluence
-
-```bash
-python -m src.publishers.cli /path/to/repo --confluence-only
-```
-
-### Publish to Google Docs
-
-```bash
-python -m src.publishers.cli /path/to/repo --google-docs-only
+cd repo-doc-mcp-/vscode-extension
+npm install
+npm run compile
+# Press F5 in VS Code to launch Extension Development Host
 ```
 
 <br/>
 
-## 🖥 IDE Extensions
+## Setup
 
-<table>
-<tr>
-<td width="50%" align="center">
+On first install, a webview wizard walks you through configuration:
 
-### VS Code
+| Step | What | Where it's stored |
+|------|------|-------------------|
+| LLM Provider | Anthropic / OpenAI / Bedrock | VS Code settings |
+| API Key | Your provider's key | OS Keychain (SecretStorage) |
+| Confluence URL | `https://yoursite.atlassian.net/wiki` | VS Code settings |
+| Space Key | Your personal space key | VS Code settings |
+| Parent Page ID | Page under which docs are created | VS Code settings |
+| Email | Atlassian account email | OS Keychain (SecretStorage) |
+| API Token | Confluence API token | OS Keychain (SecretStorage) |
 
-```
-Cmd+Shift+P → "Repo Doc: Generate"
-```
-
-Features:
-- Sidebar with action buttons
-- Doc viewer with tabbed interface
-- Mermaid diagram rendering
-- Real-time generation progress
-
-</td>
-<td width="50%" align="center">
-
-### IntelliJ / JetBrains
-
-```
-Tools → Repo Doc → Generate
-```
-
-Features:
-- Tool window panel
-- Settings page integration
-- Branch watcher with status bar widget
-- Auto-trigger on branch switch
-
-</td>
-</tr>
-</table>
+All secrets stay in your OS keychain — never in plain text files.
 
 <br/>
 
-## ☁️ Publishing
+## Configuration
 
-| Destination | Format | Auth | Auto-Update |
-|-------------|--------|------|-------------|
-| **Confluence** | XHTML Storage Format | Email + API Token | ✅ On commit |
-| **Google Docs** | Batch Update API | Service Account | ✅ On commit |
-| **Local Markdown** | `.md` files | None | ✅ Always |
+All settings under `repoDoc.*` in VS Code:
 
-Docs are published as **living pages** — subsequent runs update the same page (version incremented) rather than creating duplicates.
-
-<br/>
-
-## 🔄 Auto-Update Modes
-
-```bash
-# MODE 1: Background polling (checks every 5 min)
-python -m src.watcher.cli /path/to/repo --branch main --interval 5
-
-# MODE 2: Git hooks (fires on commit/merge)
-python -m src.watcher.cli install-hooks /path/to/repo
-
-# MODE 3: CI/CD (runs in GitHub Actions / GitLab CI)
-python -m src.watcher.cli check --repo-path .
-```
-
-### Smart Change Detection
-
-```
-Small changes (formatting, comments)  → COSMETIC   → Skip regen
-Code changes (modified functions)     → CONTENT    → Partial update
-New modules or restructure            → STRUCTURAL → Full regen
-```
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `repoDoc.llm.provider` | LLM provider | `anthropic` |
+| `repoDoc.llm.model` | Model ID | `claude-sonnet-4-20250514` |
+| `repoDoc.confluence.baseUrl` | Confluence instance URL | — |
+| `repoDoc.confluence.spaceKey` | Space key for docs | — |
+| `repoDoc.confluence.parentPageId` | Parent page for docs | — |
+| `repoDoc.baseBranch` | Branch to compare against | `main` |
+| `repoDoc.docLength` | Output verbosity (concise/standard/detailed) | `concise` |
+| `repoDoc.bedrock.region` | AWS region (Bedrock only) | `us-west-2` |
+| `repoDoc.bedrock.profile` | AWS SSO profile (Bedrock only) | — |
 
 <br/>
 
-## 🧩 MCP Server Tools
+## Commands
 
-The system exposes **11 MCP tools** that any MCP client can call:
-
-| Tool | Description |
-|------|-------------|
-| `generate_docs` | Generate both doc types |
-| `generate_technical_doc` | Technical only |
-| `generate_non_technical_doc` | Non-technical only |
-| `get_repo_summary` | Quick scan (no LLM) |
-| `list_config` | Show current configuration |
-| `update_config` | Modify settings |
-| `check_and_update_docs` | Smart incremental update |
-| `install_git_hooks` | Set up auto-triggers |
-| `generate_ci_workflow` | Create GitHub Actions YAML |
-| `generate_mr_docs` | Docs for a merge request |
-| `generate_mr_docs_from_commits` | Docs from commit range |
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `Repo Doc: Run` | `Cmd+Shift+G` | Generate/update branch docs |
+| `Repo Doc: Setup` | — | Re-run configuration wizard |
+| `Repo Doc: View Docs` | — | Open last generated docs |
 
 <br/>
 
-## 🛠 LLM Providers
+## Example Output
 
-```yaml
-# Anthropic Claude (recommended)
-llm:
-  provider: "anthropic"
-  model: "claude-sonnet-4-20250514"
-  api_key: "sk-ant-..."
+### Non-Technical Summary
+> **What's Happening:** This change adds user authentication to the API, requiring valid tokens for protected endpoints.
+>
+> **Why It Matters:** Without auth, anyone with the URL could access or modify data. This closes that security gap before launch.
+>
+> **What to Expect:** Users will need to log in. The login flow adds ~2 seconds to first request. No other behavior changes.
 
-# OpenAI GPT
-llm:
-  provider: "openai"
-  model: "gpt-4o"
-  api_key: "sk-..."
+### Technical Review
+> **What & Why:** Adds JWT-based auth middleware to all `/api/*` routes. Motivated by pre-launch security audit finding AUTH-001.
+>
+> **Key Changes:** New `middleware/auth.ts` validates Bearer tokens, extracts claims, attaches user context to request. Token refresh handled via `/auth/refresh` endpoint.
+>
+> **Risks & Rollback:** If token validation is too strict, legitimate requests may 401. Feature-flag `AUTH_ENABLED=false` bypasses. Revert: single commit, no migrations.
 
-# AWS Bedrock (uses SSO/IAM — no API key)
-llm:
-  provider: "bedrock"
-  model: "arn:aws:bedrock:us-west-2:..."
-  aws_profile: "your-sso-profile"
+<br/>
 
-# Ollama (free, runs locally)
-llm:
-  provider: "ollama"
-  model: "llama3.1"
-  base_url: "http://localhost:11434"
+## Architecture
+
+```
+vscode-extension/src/
+├── extension.ts           Entry point — registers commands, orchestrates flow
+├── config/
+│   ├── wizard.ts          Webview setup wizard (persistent form)
+│   ├── settings.ts        Typed config reader with defaults
+│   └── secrets.ts         OS keychain wrapper (SecretStorage)
+├── git/
+│   └── diff.ts            Branch detection, three-dot diff, parallel git ops
+├── scanner/
+│   └── scanner.ts         Fast repo walker — 25+ languages, structure mapping
+├── llm/
+│   ├── provider.ts        Factory pattern — createProvider(type, config)
+│   ├── anthropic.ts       Anthropic Claude SDK
+│   ├── openai.ts          OpenAI SDK
+│   └── bedrock.ts         AWS Bedrock (InvokeModelCommand)
+├── generator/
+│   ├── prompts.ts         Prompt templates — concise, decision-focused
+│   └── generator.ts       Parallel LLM calls for both doc types
+├── publisher/
+│   └── confluence.ts      REST API client — create/update/version pages
+└── tracker/
+    └── tracker.ts         Branch → Confluence page ID mapping (workspaceState)
 ```
 
 <br/>
 
-## 📁 Project Structure
+## Roadmap
 
-```
-repo-doc-mcp/
-├── src/
-│   ├── parsers/          # Scanner + Analyzer (reads & understands code)
-│   ├── llm/              # Provider abstraction (Anthropic/OpenAI/Bedrock/Ollama)
-│   ├── generators/       # Doc generation (section-by-section LLM calls)
-│   ├── publishers/       # Confluence + Google Docs integration
-│   ├── watcher/          # Branch watcher, git hooks, incremental updates
-│   ├── mr_docs/          # Merge request documentation
-│   ├── mcp_server/       # MCP protocol server (11 tools)
-│   └── cli.py            # Command-line interface
-├── vscode-extension/     # VS Code extension (TypeScript)
-├── intellij-plugin/      # IntelliJ plugin (Kotlin)
-├── tests/                # 60 tests
-└── repo-doc-mcp.example.yaml
-```
+### Done
 
-<br/>
+- [x] Full TypeScript rewrite — zero external dependencies for users
+- [x] Webview setup wizard (no disappearing popups)
+- [x] Git diff extraction (three-dot, parallel, safe from injection)
+- [x] Repo scanning (languages, structure, key files)
+- [x] LLM integration — Anthropic, OpenAI, AWS Bedrock
+- [x] Confluence publishing — create + update with version tracking
+- [x] Branch-to-page tracking (update, never duplicate)
+- [x] Step-based progress with elapsed time + cancel
+- [x] Concise prompts (decisions & risks, not file listings)
+- [x] Markdown → Confluence XHTML converter (tables, code blocks, lists)
+- [x] SecretStorage for all credentials
+- [x] Personal space security constraint
 
-## 🧪 Testing
+### Next Up
 
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run all tests
-python -m pytest tests/ -v
-
-# Expected: 60 passed ✅
-```
-
-<br/>
-
-## 📋 Roadmap
-
-- [x] Multi-LLM support (Anthropic, OpenAI, Bedrock, Ollama)
-- [x] Section-by-section generation (no more truncated docs)
-- [x] Confluence publisher with personal space support
-- [x] Google Docs publisher
-- [x] VS Code extension with sidebar + doc viewer
-- [x] IntelliJ plugin with tool window
-- [x] Branch watcher with 3-tier smart updates
-- [x] MR/PR documentation generator
-- [x] Git hooks for auto-trigger
+- [ ] Wire `docLength` setting into prompt templates
+- [ ] Page-level restrictions (lock docs to creator only)
+- [ ] Doc preview before publish
+- [ ] Success notifications with clickable Confluence links
+- [ ] Output channel for debug logging
+- [ ] Unit + integration tests
 - [ ] VS Code Marketplace publishing
-- [ ] Streaming output during generation
-- [ ] Custom doc templates
-- [ ] Multi-language doc generation (i18n)
-- [ ] GitHub Actions marketplace action
+- [ ] Extension icon and screenshots
+
+### Future
+
+- [ ] OAuth for Confluence (replace API tokens)
+- [ ] Streaming LLM output in webview
+- [ ] Real-time file watching (auto-regen)
+- [ ] Google Docs / Notion / Slack publishers
+- [ ] Custom prompt templates
+- [ ] PR description generation from same diff
+- [ ] CLI for CI/CD pipelines
+- [ ] IntelliJ plugin port
+- [ ] GitHub Action for auto-docs on PR
+
+<br/>
+
+## Supported LLM Providers
+
+| Provider | Auth Method | Example Model |
+|----------|-------------|---------------|
+| **Anthropic** | API Key | `claude-sonnet-4-20250514` |
+| **OpenAI** | API Key | `gpt-4o` |
+| **AWS Bedrock** | IAM/SSO Profile | `arn:aws:bedrock:us-west-2:...` |
+
+<br/>
+
+## Security
+
+- All API keys and tokens stored in OS keychain via VS Code SecretStorage
+- Extension only publishes to the configured space + parent page
+- Git commands use `execFile` (not `exec`) — immune to shell injection
+- No telemetry, analytics, or external reporting
+- Diff content sent only to your chosen LLM provider
+
+<br/>
+
+## Development
+
+```bash
+cd vscode-extension
+npm install
+npm run compile
+
+# Launch Extension Development Host
+# Press F5 in VS Code (uses .vscode/launch.json)
+
+# Watch mode for continuous compilation
+npm run watch
+```
 
 <br/>
 
@@ -387,26 +342,26 @@ python -m pytest tests/ -v
 
 <div align="center">
 
-**Built with 🧠 by [vansh482](https://github.com/vansh482)**
-
-*Because documentation should write itself.*
+```
+    ┌─────────────────────────────────────────────────────┐
+    │                                                     │
+    │   Your code changes.                                │
+    │   Your docs update.                                 │
+    │   Your team stays informed.                         │
+    │                                                     │
+    │   Automatically.                                    │
+    │                                                     │
+    └─────────────────────────────────────────────────────┘
+```
 
 <br/>
 
-```
-     ___           ___           ___           ___
-    /\  \         /\  \         /\  \         /\  \
-   /::\  \       /::\  \       /::\  \       /::\  \
-  /:/\:\  \     /:/\:\  \     /:/\:\  \     /:/\:\  \
- /::\~\:\  \   /::\~\:\  \   /::\~\:\  \   /:/  \:\  \
-/:/\:\ \:\__\ /:/\:\ \:\__\ /:/\:\ \:\__\ /:/__/ \:\__\
-\/_|::\/:/  / \:\~\:\ \/__/ \/__\:\/:/  / \:\  \ /:/  /
-   |:|::/  /   \:\ \:\__\        \::/  /   \:\  /:/  /
-   |:|\/__/     \:\ \/__/         \/__/     \:\/:/  /
-   |:|  |        \:\__\                      \::/  /
-    \|__|         \/__/                       \/__/
+**Built by [vansh482](https://github.com/vansh482)**
 
-    R E P O   D O C   G E N E R A T O R
-```
+*Documentation should write itself.*
+
+<br/>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=6C63FF&height=100&section=footer" width="100%"/>
 
 </div>
