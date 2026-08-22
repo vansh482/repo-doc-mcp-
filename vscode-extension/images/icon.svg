@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6C63FF"/>
+      <stop offset="100%" style="stop-color:#3B35CC"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="20" fill="url(#bg)"/>
+  <!-- Document icon -->
+  <path d="M40 24h32l20 20v60a4 4 0 01-4 4H40a4 4 0 01-4 4V28a4 4 0 014-4z" fill="white" opacity="0.95"/>
+  <path d="M72 24v16a4 4 0 004 4h16" fill="none" stroke="white" stroke-width="2" opacity="0.6"/>
+  <!-- Lines representing text -->
+  <rect x="48" y="52" width="32" height="3" rx="1.5" fill="#6C63FF" opacity="0.6"/>
+  <rect x="48" y="60" width="24" height="3" rx="1.5" fill="#6C63FF" opacity="0.4"/>
+  <rect x="48" y="68" width="28" height="3" rx="1.5" fill="#6C63FF" opacity="0.6"/>
+  <rect x="48" y="76" width="20" height="3" rx="1.5" fill="#6C63FF" opacity="0.4"/>
+  <!-- AI sparkle -->
+  <circle cx="98" cy="90" r="16" fill="#FFD700" opacity="0.9"/>
+  <path d="M98 78l2 8 8 2-8 2-2 8-2-8-8-2 8-2z" fill="white"/>
+</svg>
