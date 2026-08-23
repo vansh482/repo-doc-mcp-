@@ -149,13 +149,15 @@ Step-by-step progress indicator with:
 
 ## Install
 
-### From VS Code Marketplace (coming soon)
+### From VS Code Marketplace
+
+Search "Repo Doc Generator" in VS Code Extensions, or:
 
 ```
-ext install vansh482.repo-doc-generator
+ext install devcraft-tools.repo-doc-generator
 ```
 
-### From Source (now)
+### From Source
 
 ```bash
 git clone https://github.com/vansh482/repo-doc-mcp-.git
@@ -276,29 +278,32 @@ vscode-extension/src/
 - [x] Markdown → Confluence XHTML converter (tables, code blocks, lists)
 - [x] SecretStorage for all credentials
 - [x] Personal space security constraint
+- [x] Sidebar panel with Run button, live status, progress bar, cancel, result links
+- [x] VS Code Marketplace publishing (devcraft-tools)
+- [x] Extension icon (128x128 PNG)
+- [x] Legacy code cleanup (pure TypeScript repo)
+- [x] MIT License
 
 ### Next Up
 
+- [ ] Smart base branch detection (develop, mainline, auto-detect)
 - [ ] Wire `docLength` setting into prompt templates
 - [ ] Page-level restrictions (lock docs to creator only)
-- [ ] Doc preview before publish
-- [ ] Success notifications with clickable Confluence links
-- [ ] Output channel for debug logging
+- [ ] Custom instructions field (per-run formatting hints)
+- [ ] Token usage tracking
 - [ ] Unit + integration tests
-- [ ] VS Code Marketplace publishing
-- [ ] Extension icon and screenshots
 
 ### Future
 
+- [ ] Multi-publisher support (Notion, Google Docs, Slack, Markdown, SharePoint)
 - [ ] OAuth for Confluence (replace API tokens)
 - [ ] Streaming LLM output in webview
-- [ ] Real-time file watching (auto-regen)
-- [ ] Google Docs / Notion / Slack publishers
-- [ ] Custom prompt templates
-- [ ] PR description generation from same diff
 - [ ] CLI for CI/CD pipelines
-- [ ] IntelliJ plugin port
+- [ ] MCP Server (AI tool integration)
 - [ ] GitHub Action for auto-docs on PR
+- [ ] IntelliJ plugin port
+- [ ] Custom prompt templates
+- [ ] Ollama (local LLM, fully offline)
 
 <br/>
 
@@ -312,13 +317,20 @@ vscode-extension/src/
 
 <br/>
 
-## Security
+## Security & Data Flow
+
+**This extension is a pipe, not a platform.** Your code goes directly from your machine to the APIs you configure — no middleman.
+
+```
+Your machine (git diff)  ──►  LLM API (your creds)  ──►  back to you  ──►  Confluence (your instance)
+```
 
 - All API keys and tokens stored in OS keychain via VS Code SecretStorage
 - Extension only publishes to the configured space + parent page
 - Git commands use `execFile` (not `exec`) — immune to shell injection
 - No telemetry, analytics, or external reporting
-- Diff content sent only to your chosen LLM provider
+- No intermediary server — zero network calls except to APIs you explicitly configured
+- **For maximum isolation:** AWS Bedrock keeps LLM calls within your own AWS account
 
 <br/>
 

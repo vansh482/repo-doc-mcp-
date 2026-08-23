@@ -23,8 +23,8 @@ All possible improvements, features, and enhancements. Organized by priority and
 - [ ] **Custom instructions text field** — Add an optional textarea in the sidebar near the Run button. User can type formatting/focus instructions (e.g. "focus on API changes", "use bullet points only", "include diagrams"). Pass as additional context to the LLM prompt. Empty = default behavior.
 - [ ] **Fix page title naming** — Currently titles are `repoName — branchName — Technical/Summary` (e.g. `repo-doc-mcp — extension-packaging — Technical`). Should just be `branchName — Technical/Summary`. The repo name is redundant since pages already live under a repo-scoped parent. Fix in `extension.ts` lines 174-175.
 - [ ] **Output channel logging** — Write detailed logs to a dedicated VS Code Output Channel for debugging
-- [ ] **Success notification with links** — After publish, show clickable links to both Confluence pages
-- [ ] **Status bar item** — Persistent status bar showing last generation time and branch name
+- [x] **Success notification with links** — After publish, show clickable links to both Confluence pages
+- [x] **Status bar item** — Persistent status bar showing last generation time and branch name
 
 ### Quality
 - [ ] **Unit tests** — Add tests for git/diff.ts, scanner, markdown converter, tracker
@@ -36,20 +36,18 @@ All possible improvements, features, and enhancements. Organized by priority and
 ## Medium Priority (Will Do)
 
 ### Features
-- [ ] **Custom prompt templates** — Let users provide their own prompt templates via settings or a .repodoc file
-- [ ] **Multi-repo support** — Handle VS Code multi-root workspaces, generate docs per repo
-- [ ] **Selective file inclusion** — Let users pick which changed files to include in the diff (via quick pick)
-- [ ] **Doc preview before publish** — Show generated markdown in a webview tab before pushing to Confluence
-- [ ] **Branch comparison picker** — Let users choose any two branches to compare, not just current vs main
+
+- [ ] **Selective file exclusion** — Let users pick which changed files to inot nclude in the diff (via quick pick)
+
 - [ ] **Auto-detect Confluence space** — Query user's spaces and let them pick from a dropdown
 - [ ] **Commit-level docs** — Option to generate docs for a single commit instead of full branch diff
 - [ ] **Draft mode** — Publish as Confluence draft (unpublished) for review before making visible
 
 ### UX Improvements
-- [ ] **Streaming LLM output** — Show doc content appearing in real-time in a webview as LLM generates
+-
 - [ ] **History panel** — Show list of previously generated docs with links, timestamps, branches
 - [ ] **Quick pick for common actions** — Cmd+Shift+P menu with "Generate", "View Last", "Open in Confluence"
-- [ ] **Keyboard shortcut customization** — Document and expose rebindable shortcuts
+-
 - [ ] **Onboarding walkthrough** — VS Code native walkthrough API (contributes.walkthroughs) for first-time setup
 
 ### Auth & Security
