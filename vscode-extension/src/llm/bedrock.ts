@@ -3,7 +3,7 @@ import {
   InvokeModelCommand,
 } from '@aws-sdk/client-bedrock-runtime';
 import { fromIni } from '@aws-sdk/credential-providers';
-import { LLMProvider } from './provider';
+import { LLMProvider, LLMResponse } from './provider';
 
 export class BedrockProvider implements LLMProvider {
   private client: BedrockRuntimeClient;
@@ -17,8 +17,7 @@ export class BedrockProvider implements LLMProvider {
     });
   }
 
-  async generate(prompt: string, systemPrompt?: string): Promise<string> {
-    // Bedrock Claude uses the Anthropic Messages API format
+  async generate(prompt: string, systemPrompt?: string): Promise<LLMResponse> {
     const body = JSON.stringify({
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: 4096,
@@ -43,7 +42,13 @@ export class BedrockProvider implements LLMProvider {
       if (!textBlock?.text) {
         throw new Error('No text content in Bedrock response');
       }
-      return textBlock.text;
+      return {
+        content: textBlock.text,
+        usage: {
+          inputTokens: responseBody.usage?.input_tokens ?? 0,
+          outputTokens: responseBody.usage?.output_tokens ?? 0,
+        },
+      };
     } catch (err: any) {
       if (err.name === 'AccessDeniedException') {
         throw new Error(

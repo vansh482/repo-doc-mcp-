@@ -84,6 +84,33 @@ export class ConfluencePublisher {
     }
   }
 
+  async restrictPageToCurrentUser(pageId: string): Promise<void> {
+    const currentUser = await this.request('/rest/api/user/current');
+    const accountId = currentUser.accountId;
+
+    const restrictions = [
+      {
+        operation: 'read',
+        restrictions: {
+          user: { results: [{ type: 'known', accountId }] },
+          group: { results: [] },
+        },
+      },
+      {
+        operation: 'update',
+        restrictions: {
+          user: { results: [{ type: 'known', accountId }] },
+          group: { results: [] },
+        },
+      },
+    ];
+
+    await this.request(`/rest/api/content/${pageId}/restriction`, {
+      method: 'PUT',
+      body: JSON.stringify(restrictions),
+    });
+  }
+
   private async request(path: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.config.baseUrl}${path}`;
     const response = await fetch(url, {

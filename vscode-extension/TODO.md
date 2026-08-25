@@ -7,22 +7,17 @@ All possible improvements, features, and enhancements. Organized by priority and
 ## High Priority (Should Do Next)
 
 ### Functionality
-- [ ] **Smart base branch detection** — Currently only auto-detects main/master/mainline. Improve to:
-  - Detect merge target via `git config branch.<name>.merge` (the branch it was created from)
-  - Add `develop`, `development` to candidate list
-  - Check remote branches (`origin/develop`, etc.) as fallback
-  - Allow per-run override (quick pick "Compare against which branch?" before generating)
-  - Keep global default in settings (`repoDoc.baseBranch`) as final fallback
-- [ ] **Wire up `docLength` setting** — Currently declared but not consumed. Make prompts vary based on concise/standard/detailed selection
-- [ ] **Page-level restrictions** — After creating/updating pages, call Confluence restriction API to lock view/edit to the authenticated user only
-- [ ] **Error recovery** — If LLM call succeeds but Confluence publish fails, save generated docs locally so user doesn't lose them
-- [ ] **Diff too large handling** — When diff exceeds token limits, summarize by file groups instead of truncating mid-file
-- [ ] **Cover non-code artifacts in docs** — Current prompts are biased toward code changes. Docs/meta files (LICENSE, HISTORY.md, TODO.md, configs, icons) get ignored or one-lined. Improve prompts to summarize what non-code additions do and why they matter.
+- [x] **Smart base branch detection** — Detects via tracking config, expanded candidates (main/master/develop/development/mainline), remote fallback (origin/*), clear error message with settings instructions
+- [x] **Wire up `docLength` setting** — Prompts vary based on concise/standard/detailed selection; setting registered in package.json, threaded through config → generator → prompts
+- [x] **Page-level restrictions** — `restrictPageToCurrentUser()` method calls Confluence restriction API to lock view/edit to authenticated user
+- [x] **Error recovery** — If Confluence publish fails, docs saved locally to `.repodoc/` directory with user-facing warning
+- [x] **Diff too large handling** — `truncateDiffAtFileBoundaries()` cuts at file boundaries, lists skipped files, shows user warning
+- [x] **Cover non-code artifacts in docs** — Prompts explicitly instruct LLM to cover documentation, licenses, configs, CI/CD, package metadata, icons
 
 ### UX
-- [ ] **Custom instructions text field** — Add an optional textarea in the sidebar near the Run button. User can type formatting/focus instructions (e.g. "focus on API changes", "use bullet points only", "include diagrams"). Pass as additional context to the LLM prompt. Empty = default behavior.
-- [ ] **Fix page title naming** — Currently titles are `repoName — branchName — Technical/Summary` (e.g. `repo-doc-mcp — extension-packaging — Technical`). Should just be `branchName — Technical/Summary`. The repo name is redundant since pages already live under a repo-scoped parent. Fix in `extension.ts` lines 174-175.
-- [ ] **Output channel logging** — Write detailed logs to a dedicated VS Code Output Channel for debugging
+- [x] **Custom instructions text field** — Textarea in sidebar captures user instructions, passed through generator → prompts. Appended as "Additional Instructions" section to both technical and non-technical prompts.
+- [x] **Fix page title naming** — Now `branchName — Technical/Summary` (repo name removed since pages live under repo-scoped parent)
+- [x] **Output channel logging** — Detailed logging: branch info, token usage, timing, truncation warnings, error details
 - [x] **Success notification with links** — After publish, show clickable links to both Confluence pages
 - [x] **Status bar item** — Persistent status bar showing last generation time and branch name
 
@@ -105,7 +100,7 @@ The core logic (git diff → scan → LLM → publish) is already framework-inde
 
 ## Monetization Ideas (Future)
 
-- [ ] **Token usage tracking** — All three SDKs return token counts in responses (Anthropic: `usage.input_tokens`/`output_tokens`, OpenAI: `usage.prompt_tokens`/`completion_tokens`, Bedrock: `usage.inputTokens`/`outputTokens`). Capture per-run, store in workspaceState or a local JSON, surface in sidebar (e.g. "Last run: 12K tokens"). Foundation for per-doc/per-char pricing.
+- [x] **Token usage tracking** — All three providers return usage in LLMResponse. Generator accumulates input+output tokens. Logged to output channel per-run. Foundation for per-doc/per-char pricing.
 - [ ] **Usage-based pricing** — Track tokens used, offer free tier + paid for heavy usage
 - [ ] **Team/org licenses** — Shared configuration, team spaces, admin controls
 - [ ] **Custom model fine-tuning** — Premium feature: fine-tune on org's doc style

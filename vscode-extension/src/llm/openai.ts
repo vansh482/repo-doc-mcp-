@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { LLMProvider } from './provider';
+import { LLMProvider, LLMResponse } from './provider';
 
 export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;
@@ -10,7 +10,7 @@ export class OpenAIProvider implements LLMProvider {
     this.model = model;
   }
 
-  async generate(prompt: string, systemPrompt?: string): Promise<string> {
+  async generate(prompt: string, systemPrompt?: string): Promise<LLMResponse> {
     try {
       const messages: OpenAI.ChatCompletionMessageParam[] = [];
       if (systemPrompt) {
@@ -28,7 +28,13 @@ export class OpenAIProvider implements LLMProvider {
       if (!content) {
         throw new Error('No content in OpenAI response');
       }
-      return content;
+      return {
+        content,
+        usage: {
+          inputTokens: response.usage?.prompt_tokens ?? 0,
+          outputTokens: response.usage?.completion_tokens ?? 0,
+        },
+      };
     } catch (err: any) {
       if (err?.status === 401) {
         throw new Error('Invalid OpenAI API key. Check your configuration.');

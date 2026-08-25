@@ -14,6 +14,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'repoDocSidebar';
   private view?: vscode.WebviewView;
   private state: SidebarState = { status: 'idle' };
+  public customInstructions: string = '';
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -29,6 +30,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage((message) => {
       switch (message.command) {
         case 'run':
+          this.customInstructions = message.instructions || '';
           vscode.commands.executeCommand('repoDoc.run');
           break;
         case 'cancel':
@@ -200,6 +202,28 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     font-weight: 500;
   }
 
+  .instructions-textarea {
+    width: 100%;
+    min-height: 48px;
+    max-height: 100px;
+    padding: 8px;
+    margin-top: 8px;
+    border: 1px solid var(--vscode-input-border);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+    border-radius: 4px;
+    resize: vertical;
+  }
+  .instructions-textarea::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+  .instructions-textarea:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+  }
+
   .hidden { display: none; }
   .mt-8 { margin-top: 8px; }
   .mt-12 { margin-top: 12px; }
@@ -215,6 +239,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     <button class="btn btn-danger mt-8 hidden" id="cancelBtn" onclick="handleCancel()">
       &#9632; Cancel
     </button>
+    <textarea
+      id="instructions"
+      class="instructions-textarea"
+      placeholder="Optional: focus or formatting instructions (e.g. 'focus on API changes', 'use bullet points only')"
+      maxlength="500"
+      rows="2"
+    ></textarea>
   </div>
 
   <div class="section">
@@ -256,7 +287,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   const vscode = acquireVsCodeApi();
   let currentState = { status: 'idle' };
 
-  function handleRun() { vscode.postMessage({ command: 'run' }); }
+  function handleRun() {
+    const instructions = document.getElementById('instructions').value.trim();
+    vscode.postMessage({ command: 'run', instructions });
+  }
   function handleCancel() { vscode.postMessage({ command: 'cancel' }); }
   function handleSetup() { vscode.postMessage({ command: 'setup' }); }
   function openTech() { vscode.postMessage({ command: 'openUrl', url: currentState.techUrl }); }
