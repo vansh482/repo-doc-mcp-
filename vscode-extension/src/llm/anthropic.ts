@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { LLMProvider } from './provider';
+import { LLMProvider, LLMResponse } from './provider';
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
@@ -10,7 +10,7 @@ export class AnthropicProvider implements LLMProvider {
     this.model = model;
   }
 
-  async generate(prompt: string, systemPrompt?: string): Promise<string> {
+  async generate(prompt: string, systemPrompt?: string): Promise<LLMResponse> {
     try {
       const response = await this.client.messages.create({
         model: this.model,
@@ -23,7 +23,13 @@ export class AnthropicProvider implements LLMProvider {
       if (!textBlock || textBlock.type !== 'text') {
         throw new Error('No text content in Anthropic response');
       }
-      return textBlock.text;
+      return {
+        content: textBlock.text,
+        usage: {
+          inputTokens: response.usage?.input_tokens ?? 0,
+          outputTokens: response.usage?.output_tokens ?? 0,
+        },
+      };
     } catch (err: any) {
       if (err?.status === 401) {
         throw new Error('Invalid Anthropic API key. Check your configuration.');

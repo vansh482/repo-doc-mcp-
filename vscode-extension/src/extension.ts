@@ -121,11 +121,20 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
     }
 
     sidebar.updateState({ branch: diff.currentBranch });
-    outputChannel.appendLine(`Branch: ${diff.currentBranch} (${diff.changedFiles.length} files changed vs ${baseBranch})`);
+    outputChannel.appendLine(`\n[RepoDoc] ═══ Run started: ${diff.currentBranch} vs ${baseBranch} ═══`);
+    outputChannel.appendLine(`[RepoDoc] Step 1: ${diff.changedFiles.length} files changed, ${diff.commitMessages.length} commits`);
+
+    if (diff.truncated) {
+      outputChannel.appendLine(`[RepoDoc] Warning: Diff truncated (${Math.round(diff.originalSize / 1024)}KB). Some files may not appear in generated docs.`);
+      vscode.window.showWarningMessage(
+        `Large diff (${diff.changedFiles.length} files, ${Math.round(diff.originalSize / 1024)}KB). Doc quality may be reduced for skipped files.`
+      );
+    }
 
     // Step 2: Scan repo
     sidebar.updateState({ step: 'Step 2/5: Scanning repo structure...' });
     const repoContext = await scanRepo(repoPath);
+    outputChannel.appendLine(`[RepoDoc] Step 2: Scanned ${repoContext.totalFiles} files across ${Object.keys(repoContext.languages).length} languages`);
     sidebar.updateState({ step: `Step 2/5: Scanned ${repoContext.totalFiles} files` });
 
     if (token.isCancellationRequested) {
@@ -143,8 +152,16 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
       profile: config.bedrock.profile,
     });
 
-    const docs = await generateDocs(provider, diff, repoContext);
+    const instructions = sidebar.customInstructions || undefined;
+    const docs = await generateDocs(provider, diff, repoContext, config.docLength, instructions);
     sidebar.updateState({ step: 'Step 3/5: AI generation complete' });
+
+    outputChannel.appendLine(`[RepoDoc] Step 3: AI generation complete (${docs.technical.length + docs.nonTechnical.length} chars output)`);
+    if (docs.usage) {
+      outputChannel.appendLine(
+        `[RepoDoc] Tokens: ${docs.usage.inputTokens} input + ${docs.usage.outputTokens} output = ${docs.usage.inputTokens + docs.usage.outputTokens} total`
+      );
+    }
 
     if (token.isCancellationRequested) {
       sidebar.updateState({ status: 'idle' });
@@ -153,53 +170,91 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
 
     // Step 4: Publish to Confluence
     sidebar.updateState({ step: 'Step 4/5: Publishing to Confluence...' });
-    const cfgRaw = vscode.workspace.getConfiguration('repoDoc');
-    const confluenceToken = await secretStore.getConfluenceToken() || cfgRaw.get<string>('confluence.apiToken') || '';
-    const confluenceEmail = await secretStore.getConfluenceEmail() || cfgRaw.get<string>('confluence.email') || '';
-
-    if (!confluenceToken || !confluenceEmail) {
-      throw new Error('Confluence credentials not found. Run setup again.');
-    }
-
-    const publisher = new ConfluencePublisher({
-      baseUrl: config.confluence.baseUrl,
-      email: confluenceEmail,
-      apiToken: confluenceToken,
-      spaceKey: config.confluence.spaceKey,
-      parentPageId: config.confluence.parentPageId,
-    });
 
     const existingPages = docTracker.getPages(diff.currentBranch);
-    const repoName = repoContext.name;
-    const techTitle = `${repoName} — ${diff.currentBranch} — Technical`;
-    const nonTechTitle = `${repoName} — ${diff.currentBranch} — Summary`;
+    let techResult: { pageId: string; url: string } | undefined;
+    let nonTechResult: { pageId: string; url: string } | undefined;
 
-    let techResult;
-    let nonTechResult;
+    try {
+      const cfgRaw = vscode.workspace.getConfiguration('repoDoc');
+      const confluenceToken = await secretStore.getConfluenceToken() || cfgRaw.get<string>('confluence.apiToken') || '';
+      const confluenceEmail = await secretStore.getConfluenceEmail() || cfgRaw.get<string>('confluence.email') || '';
 
-    if (existingPages) {
-      const techVersion = await publisher.getPageVersion(existingPages.technicalPageId);
-      techResult = await publisher.updatePage(
-        existingPages.technicalPageId, techTitle, docs.technical, techVersion
-      );
+      if (!confluenceToken || !confluenceEmail) {
+        throw new Error('Confluence credentials not found. Run setup again.');
+      }
 
-      const nonTechVersion = await publisher.getPageVersion(existingPages.nonTechnicalPageId);
-      nonTechResult = await publisher.updatePage(
-        existingPages.nonTechnicalPageId, nonTechTitle, docs.nonTechnical, nonTechVersion
-      );
-
-      outputChannel.appendLine(`Updated existing pages for branch: ${diff.currentBranch}`);
-    } else {
-      techResult = await publisher.createPage(techTitle, docs.technical);
-      nonTechResult = await publisher.createPage(nonTechTitle, docs.nonTechnical);
-
-      docTracker.setPages(diff.currentBranch, {
-        technicalPageId: techResult.pageId,
-        nonTechnicalPageId: nonTechResult.pageId,
-        lastUpdated: new Date().toISOString(),
+      const publisher = new ConfluencePublisher({
+        baseUrl: config.confluence.baseUrl,
+        email: confluenceEmail,
+        apiToken: confluenceToken,
+        spaceKey: config.confluence.spaceKey,
+        parentPageId: config.confluence.parentPageId,
       });
 
-      outputChannel.appendLine(`Created new pages for branch: ${diff.currentBranch}`);
+      const techTitle = `${diff.currentBranch} — Technical`;
+      const nonTechTitle = `${diff.currentBranch} — Summary`;
+
+      if (existingPages) {
+        const techVersion = await publisher.getPageVersion(existingPages.technicalPageId);
+        techResult = await publisher.updatePage(
+          existingPages.technicalPageId, techTitle, docs.technical, techVersion
+        );
+
+        const nonTechVersion = await publisher.getPageVersion(existingPages.nonTechnicalPageId);
+        nonTechResult = await publisher.updatePage(
+          existingPages.nonTechnicalPageId, nonTechTitle, docs.nonTechnical, nonTechVersion
+        );
+
+        outputChannel.appendLine(`[RepoDoc] Step 4: Updated existing pages for branch: ${diff.currentBranch}`);
+      } else {
+        techResult = await publisher.createPage(techTitle, docs.technical);
+        nonTechResult = await publisher.createPage(nonTechTitle, docs.nonTechnical);
+
+        try {
+          await publisher.restrictPageToCurrentUser(techResult.pageId);
+          await publisher.restrictPageToCurrentUser(nonTechResult.pageId);
+        } catch (restrictErr: any) {
+          outputChannel.appendLine(`Warning: Could not restrict pages — ${restrictErr.message}`);
+        }
+
+        docTracker.setPages(diff.currentBranch, {
+          technicalPageId: techResult.pageId,
+          nonTechnicalPageId: nonTechResult.pageId,
+          lastUpdated: new Date().toISOString(),
+        });
+
+        outputChannel.appendLine(`[RepoDoc] Step 4: Created new pages for branch: ${diff.currentBranch}`);
+      }
+    } catch (publishErr: any) {
+      outputChannel.appendLine(`Publish failed: ${publishErr.message}`);
+
+      const safeBranch = diff.currentBranch.replace(/\//g, '-');
+      const repodocDir = vscode.Uri.joinPath(workspaceFolder.uri, '.repodoc');
+      const techFile = vscode.Uri.joinPath(repodocDir, `${safeBranch}-technical.md`);
+      const summaryFile = vscode.Uri.joinPath(repodocDir, `${safeBranch}-summary.md`);
+
+      try {
+        await vscode.workspace.fs.createDirectory(repodocDir);
+        await vscode.workspace.fs.writeFile(techFile, Buffer.from(docs.technical, 'utf-8'));
+        await vscode.workspace.fs.writeFile(summaryFile, Buffer.from(docs.nonTechnical, 'utf-8'));
+
+        sidebar.updateState({
+          status: 'error',
+          error: `Publish failed — docs saved locally to .repodoc/. Error: ${publishErr.message}`,
+          elapsed: elapsed(),
+        });
+        vscode.window.showWarningMessage(
+          `Confluence publish failed. Docs saved to .repodoc/${safeBranch}-technical.md and .repodoc/${safeBranch}-summary.md`
+        );
+      } catch (saveErr: any) {
+        sidebar.updateState({
+          status: 'error',
+          error: `Publish failed and local save failed: ${publishErr.message}`,
+          elapsed: elapsed(),
+        });
+      }
+      return;
     }
 
     if (token.isCancellationRequested) {
@@ -213,14 +268,15 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
       status: 'done',
       step: 'Step 5/5: Done!',
       elapsed: totalTime,
-      techUrl: techResult.url,
-      summaryUrl: nonTechResult.url,
+      techUrl: techResult!.url,
+      summaryUrl: nonTechResult!.url,
       branch: diff.currentBranch,
     });
 
-    outputChannel.appendLine(`Technical: ${techResult.url}`);
-    outputChannel.appendLine(`Non-Technical: ${nonTechResult.url}`);
-    outputChannel.appendLine(`Total time: ${totalTime}s`);
+    outputChannel.appendLine(`[RepoDoc] Step 5: Done!`);
+    outputChannel.appendLine(`[RepoDoc] Technical: ${techResult!.url}`);
+    outputChannel.appendLine(`[RepoDoc] Summary: ${nonTechResult!.url}`);
+    outputChannel.appendLine(`[RepoDoc] ═══ Run finished in ${totalTime}s ═══\n`);
 
     vscode.window.showInformationMessage(
       `Docs ${existingPages ? 'updated' : 'published'} for "${diff.currentBranch}" in ${totalTime}s`
@@ -233,7 +289,7 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
       error: err.message,
       elapsed: totalTime,
     });
-    outputChannel.appendLine(`ERROR (after ${totalTime}s): ${err.message}`);
+    outputChannel.appendLine(`[RepoDoc] ERROR (after ${totalTime}s): ${err.message}`);
     outputChannel.show();
   } finally {
     clearInterval(elapsedTimer);

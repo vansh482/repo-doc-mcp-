@@ -2,8 +2,18 @@ import { AnthropicProvider } from './anthropic';
 import { OpenAIProvider } from './openai';
 import { BedrockProvider } from './bedrock';
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface LLMResponse {
+  content: string;
+  usage?: TokenUsage;
+}
+
 export interface LLMProvider {
-  generate(prompt: string, systemPrompt?: string): Promise<string>;
+  generate(prompt: string, systemPrompt?: string): Promise<LLMResponse>;
 }
 
 export type ProviderType = 'anthropic' | 'openai' | 'bedrock';

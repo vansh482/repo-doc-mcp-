@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { SecretStore } from "./secrets";
 
+export type DocLength = "concise" | "standard" | "detailed";
+
 export interface RepoDocConfig {
   llm: {
     provider: "anthropic" | "openai" | "bedrock";
@@ -12,6 +14,7 @@ export interface RepoDocConfig {
     parentPageId: string;
   };
   baseBranch: string;
+  docLength: DocLength;
   bedrock: {
     region: string;
     profile: string;
@@ -32,6 +35,7 @@ export function getConfig(): RepoDocConfig {
       parentPageId: cfg.get<string>("confluence.parentPageId") || "",
     },
     baseBranch: cfg.get<string>("baseBranch") || "main",
+    docLength: cfg.get<DocLength>("docLength") || "concise",
     bedrock: {
       region: cfg.get<string>("bedrock.region") || "us-west-2",
       profile: cfg.get<string>("bedrock.profile") || "",
