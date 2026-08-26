@@ -104,7 +104,7 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
   try {
     // Step 1: Git diff
     sidebar.updateState({ step: 'Step 1/5: Detecting branch & computing diff...' });
-    const baseBranch = config.baseBranch || await detectBaseBranch(repoPath);
+    const baseBranch = sidebar.baseBranchOverride || config.baseBranch || await detectBaseBranch(repoPath);
     const diff = await getBranchDiff(repoPath, baseBranch);
 
     if (token.isCancellationRequested) {
@@ -120,7 +120,7 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
       return;
     }
 
-    sidebar.updateState({ branch: diff.currentBranch });
+    sidebar.updateState({ branch: diff.currentBranch, baseBranch });
     outputChannel.appendLine(`\n[RepoDoc] ═══ Run started: ${diff.currentBranch} vs ${baseBranch} ═══`);
     outputChannel.appendLine(`[RepoDoc] Step 1: ${diff.changedFiles.length} files changed, ${diff.commitMessages.length} commits`);
 

@@ -34,8 +34,6 @@ All possible improvements, features, and enhancements. Organized by priority and
 
 - [ ] **Selective file exclusion** — Let users pick which changed files to inot nclude in the diff (via quick pick)
 
-- [ ] **Auto-detect Confluence space** — Query user's spaces and let them pick from a dropdown
-- [ ] **Commit-level docs** — Option to generate docs for a single commit instead of full branch diff
 - [ ] **Draft mode** — Publish as Confluence draft (unpublished) for review before making visible
 
 ### UX Improvements
@@ -77,8 +75,6 @@ All possible improvements, features, and enhancements. Organized by priority and
 - [ ] **Custom endpoint** — Let users point to any OpenAI-compatible API
 
 ### Advanced Features
-- [ ] **Real-time file watching** — Auto-regenerate docs on file save (debounced, configurable)
-- [ ] **Scheduled generation** — Auto-run on git push or at configured intervals
 - [ ] **Diff changelog mode** — Append to a running changelog instead of replacing the full doc
 - [ ] **PR description generation** — Generate a GitHub/GitLab PR description from the same diff
 - [ ] **Team knowledge base** — Aggregate docs across branches into a team-wide knowledge base
@@ -154,6 +150,16 @@ Errors are logged to VS Code Output Channel ("Repo Doc Generator"). Users must m
 - [x] VS Code Marketplace publishing (devcraft-tools.repo-doc-generator)
 - [x] Legacy code cleanup (removed Python, IntelliJ, dead docs)
 - [x] Publisher account setup (DevCraft Tools)
+
+---
+
+## Maybe / Maybe Not
+
+- [ ] **Auto-detect Confluence space** — Query user's spaces and let them pick from a dropdown
+- [ ] **Commit-level docs** — Option to generate docs for a single commit instead of full branch diff
+- [ ] **Streaming LLM output** — Show doc being written live in sidebar as tokens arrive from API
+- [ ] **Real-time file watching** — Auto-regenerate docs on file save (debounced, configurable)
+- [ ] **Scheduled generation** — Auto-run on git push or at configured intervals
 
 ---
 

@@ -5,6 +5,7 @@ export interface SidebarState {
   step?: string;
   elapsed?: number;
   branch?: string;
+  baseBranch?: string;
   error?: string;
   techUrl?: string;
   summaryUrl?: string;
@@ -15,6 +16,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private state: SidebarState = { status: 'idle' };
   public customInstructions: string = '';
+  public baseBranchOverride: string = '';
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -26,6 +28,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.view = webviewView;
     webviewView.webview.options = { enableScripts: true };
     webviewView.webview.html = this.getHtml();
+
+    const currentBaseBranch = vscode.workspace.getConfiguration('repoDoc').get<string>('baseBranch') || '';
+    this.baseBranchOverride = currentBaseBranch;
+    webviewView.webview.postMessage({ type: 'initBaseBranch', value: currentBaseBranch });
 
     webviewView.webview.onDidReceiveMessage((message) => {
       switch (message.command) {
@@ -41,6 +47,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           break;
         case 'openUrl':
           vscode.env.openExternal(vscode.Uri.parse(message.url));
+          break;
+        case 'setBaseBranch':
+          this.baseBranchOverride = message.value || '';
+          vscode.workspace.getConfiguration('repoDoc').update('baseBranch', message.value || undefined, vscode.ConfigurationTarget.Workspace);
           break;
       }
     });
@@ -224,6 +234,35 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     border-color: var(--vscode-focusBorder);
   }
 
+  .base-branch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .base-branch-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+  }
+  .base-branch-input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--vscode-input-border);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+    border-radius: 4px;
+  }
+  .base-branch-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+  .base-branch-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+  }
+
   .hidden { display: none; }
   .mt-8 { margin-top: 8px; }
   .mt-12 { margin-top: 12px; }
@@ -246,6 +285,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       maxlength="500"
       rows="2"
     ></textarea>
+    <div class="base-branch-row">
+      <span class="base-branch-label">Compare against:</span>
+      <input
+        type="text"
+        id="baseBranch"
+        class="base-branch-input"
+        placeholder="detecting..."
+        onchange="handleBaseBranchChange(this.value)"
+      />
+    </div>
   </div>
 
   <div class="section">
@@ -293,6 +342,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
   function handleCancel() { vscode.postMessage({ command: 'cancel' }); }
   function handleSetup() { vscode.postMessage({ command: 'setup' }); }
+  function handleBaseBranchChange(value) {
+    vscode.postMessage({ command: 'setBaseBranch', value: value.trim() });
+  }
   function openTech() { vscode.postMessage({ command: 'openUrl', url: currentState.techUrl }); }
   function openSummary() { vscode.postMessage({ command: 'openUrl', url: currentState.summaryUrl }); }
 
@@ -304,6 +356,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (msg.type === 'stateUpdate') {
       currentState = msg.state;
       render(currentState);
+    }
+    if (msg.type === 'initBaseBranch' && msg.value) {
+      document.getElementById('baseBranch').value = msg.value;
     }
   });
 
@@ -319,6 +374,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const errorText = document.getElementById('errorText');
     const resultSection = document.getElementById('resultSection');
     const branchBadge = document.getElementById('branchBadge');
+    const baseBranchInput = document.getElementById('baseBranch');
+
+    if (state.baseBranch && baseBranchInput) {
+      baseBranchInput.placeholder = state.baseBranch;
+    }
 
     // Reset
     statusDot.className = 'status-dot';
