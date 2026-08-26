@@ -17,6 +17,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private state: SidebarState = { status: 'idle' };
   public customInstructions: string = '';
   public baseBranchOverride: string = '';
+  public onDidResolve: (() => void) | undefined;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -32,6 +33,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const currentBaseBranch = vscode.workspace.getConfiguration('repoDoc').get<string>('baseBranch') || '';
     this.baseBranchOverride = currentBaseBranch;
     webviewView.webview.postMessage({ type: 'initBaseBranch', value: currentBaseBranch });
+
+    if (this.onDidResolve) {
+      this.onDidResolve();
+    }
 
     webviewView.webview.onDidReceiveMessage((message) => {
       switch (message.command) {

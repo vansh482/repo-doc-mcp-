@@ -2,3 +2,7 @@ out/
 node_modules/
 *.vsix
 .vscode-test/
+TODO.md
+docs/TODO-QUICK-REFERENCE.md
+docs/DISTRIBUTION-STRATEGY.md
+tmp.txt

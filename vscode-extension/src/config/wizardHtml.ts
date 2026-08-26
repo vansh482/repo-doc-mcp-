@@ -2,11 +2,13 @@ export interface WizardConfig {
   provider: string;
   model: string;
   apiKey: string;
+  hasApiKey: boolean;
   bedrockRegion: string;
   bedrockProfile: string;
   confluenceBaseUrl: string;
   confluenceEmail: string;
   confluenceApiToken: string;
+  hasConfluenceToken: boolean;
   confluenceSpaceKey: string;
   confluenceParentPageId: string;
 }
@@ -162,7 +164,7 @@ export function getWizardHtml(current: Partial<WizardConfig>): string {
     <div class="field" id="apiKeyField">
       <label for="apiKey">API Key</label>
       <div class="hint" id="apiKeyHint">Your Anthropic API key (starts with sk-ant-...)</div>
-      <input type="password" id="apiKey" value="${escapeHtml(current.apiKey || '')}" placeholder="sk-ant-..." />
+      <input type="password" id="apiKey" value="" placeholder="${current.hasApiKey ? '••••••••• (already saved — leave blank to keep)' : 'sk-ant-...'}" />
     </div>
 
     <div class="row hidden" id="bedrockFields">
@@ -195,7 +197,7 @@ export function getWizardHtml(current: Partial<WizardConfig>): string {
       <div class="field">
         <label for="confluenceApiToken">API Token</label>
         <div class="hint"><a href="https://id.atlassian.com/manage-profile/security/api-tokens" style="color:var(--vscode-textLink-foreground,#3794ff)">Generate one here</a></div>
-        <input type="password" id="confluenceApiToken" value="${escapeHtml(current.confluenceApiToken || '')}" placeholder="Your Confluence API token" />
+        <input type="password" id="confluenceApiToken" value="" placeholder="${current.hasConfluenceToken ? '••••••••• (already saved — leave blank to keep)' : 'Your Confluence API token'}" />
       </div>
     </div>
 
@@ -253,7 +255,9 @@ export function getWizardHtml(current: Partial<WizardConfig>): string {
     providerSelect.addEventListener('change', updateProviderFields);
     updateProviderFields();
 
-    document.getElementById('saveBtn').addEventListener('click', () => {
+    document.getElementById('saveBtn').addEventListener('click', function() {
+      this.disabled = true;
+      this.textContent = 'Saving...';
       const provider = providerSelect.value;
       const model = document.getElementById('model').value.trim();
       const apiKey = document.getElementById('apiKey').value.trim();
@@ -266,14 +270,16 @@ export function getWizardHtml(current: Partial<WizardConfig>): string {
       const confluenceParentPageId = document.getElementById('confluenceParentPageId').value.trim();
 
       // Validate
+      const hasApiKeySaved = ${current.hasApiKey ? 'true' : 'false'};
+      const hasConfluenceTokenSaved = ${current.hasConfluenceToken ? 'true' : 'false'};
       const errors = [];
       if (!model) errors.push('Model is required');
-      if (provider !== 'bedrock' && !apiKey) errors.push('API key is required');
+      if (provider !== 'bedrock' && !apiKey && !hasApiKeySaved) errors.push('API key is required');
       if (provider === 'bedrock' && !bedrockProfile) errors.push('AWS profile is required');
       if (provider === 'bedrock' && !bedrockRegion) errors.push('AWS region is required');
       if (!confluenceBaseUrl) errors.push('Confluence base URL is required');
       if (!confluenceEmail) errors.push('Confluence email is required');
-      if (!confluenceApiToken) errors.push('Confluence API token is required');
+      if (!confluenceApiToken && !hasConfluenceTokenSaved) errors.push('Confluence API token is required');
       if (!confluenceSpaceKey) errors.push('Confluence space key is required');
       if (!confluenceParentPageId) errors.push('Parent page ID is required');
 
@@ -281,6 +287,8 @@ export function getWizardHtml(current: Partial<WizardConfig>): string {
         errorMsg.textContent = errors.join('. ');
         errorMsg.classList.add('visible');
         successMsg.classList.remove('visible');
+        this.disabled = false;
+        this.textContent = 'Save Configuration';
         return;
       }
 
@@ -309,9 +317,17 @@ export function getWizardHtml(current: Partial<WizardConfig>): string {
 
     window.addEventListener('message', (event) => {
       const msg = event.data;
+      const saveBtn = document.getElementById('saveBtn');
       if (msg.type === 'saved') {
         successMsg.classList.add('visible');
         errorMsg.classList.remove('visible');
+        saveBtn.textContent = 'Saved!';
+      } else if (msg.type === 'error') {
+        errorMsg.textContent = msg.message || 'Failed to save configuration';
+        errorMsg.classList.add('visible');
+        successMsg.classList.remove('visible');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Configuration';
       }
     });
   </script>

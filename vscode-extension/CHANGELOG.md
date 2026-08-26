@@ -5,6 +5,26 @@ All notable changes to Repo Doc Generator are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-26
+
+### Added
+- Credential health indicator — green/red dot in sidebar header, auto-checks on open, clickable for details
+- Sidebar state persistence — history and credential status survive hide/show cycles
+- Selective file exclusion — QuickPick to exclude files before generation
+- Prompt versioning — doc metadata tracks which prompt version generated it
+- Pre-flight token health check — validates credentials before expensive LLM calls
+- Onboarding walkthrough — VS Code walkthrough API with 4 guided steps
+- History panel in sidebar — shows recent generations per branch
+
+### Fixed
+- Wizard save bug — blank secret fields no longer overwrite stored credentials
+- Wizard error handling — save failures now surface clear error messages in UI
+- Wizard validation — API key/token fields optional when already stored
+
+### Removed
+- Draft mode (unused feature)
+- TODO and distribution strategy docs from git (kept locally)
+
 ## [0.2.0] - 2026-08-22
 
 ### Added

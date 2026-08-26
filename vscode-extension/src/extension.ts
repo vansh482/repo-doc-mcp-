@@ -26,6 +26,11 @@ export function activate(context: vscode.ExtensionContext): void {
   extensionUri = context.extensionUri;
 
   sidebar = new SidebarProvider(context.extensionUri);
+  sidebar.onDidResolve = () => {
+    const history = docTracker.getHistory().map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated }));
+    sidebar.sendHistory(history);
+    handleValidateCredentials(false);
+  };
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(SidebarProvider.viewType, sidebar),
@@ -38,9 +43,6 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   checkFirstRun(context);
-
-  // Auto-validate credentials when sidebar becomes visible
-  setTimeout(() => handleValidateCredentials(false), 2000);
 }
 
 async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
