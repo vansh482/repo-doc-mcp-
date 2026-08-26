@@ -52,6 +52,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           this.baseBranchOverride = message.value || '';
           vscode.workspace.getConfiguration('repoDoc').update('baseBranch', message.value || undefined, vscode.ConfigurationTarget.Workspace);
           break;
+        case 'openHistory':
+          vscode.commands.executeCommand('repoDoc.viewDocs');
+          break;
+        case 'checkCredentials':
+          vscode.commands.executeCommand('repoDoc.validateCredentials');
+          break;
       }
     });
   }
@@ -60,6 +66,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.state = { ...this.state, ...state };
     if (this.view) {
       this.view.webview.postMessage({ type: 'stateUpdate', state: this.state });
+    }
+  }
+
+  sendHistory(history: Array<{ branch: string; lastUpdated: string }>): void {
+    if (this.view) {
+      this.view.webview.postMessage({ type: 'historyUpdate', history });
+    }
+  }
+
+  sendCredStatus(status: { checking?: boolean; allOk?: boolean; summary?: string; details?: string[] }): void {
+    if (this.view) {
+      this.view.webview.postMessage({ type: 'credStatus', ...status });
     }
   }
 
@@ -263,6 +281,45 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     border-color: var(--vscode-focusBorder);
   }
 
+  .cred-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 8px;
+  }
+  .cred-indicator:hover { background: var(--vscode-list-hoverBackground); }
+  .cred-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .cred-dot-green { background: #4caf50; }
+  .cred-dot-red { background: var(--vscode-errorForeground); }
+  .cred-dot-checking { background: #f0b400; animation: pulse 1s infinite; }
+  .cred-dot-unknown { background: var(--vscode-descriptionForeground); }
+  .cred-label { font-size: 11px; color: var(--vscode-descriptionForeground); }
+  .cred-label-ok { color: #4caf50; }
+  .cred-label-bad { color: var(--vscode-errorForeground); }
+
+  .history-list { max-height: 200px; overflow-y: auto; }
+  .history-item {
+    padding: 8px;
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .history-item:hover { background: var(--vscode-list-hoverBackground); }
+  .history-branch { font-size: 12px; font-weight: 500; }
+  .history-date { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+
   .hidden { display: none; }
   .mt-8 { margin-top: 8px; }
   .mt-12 { margin-top: 12px; }
@@ -270,7 +327,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <div class="section">
-    <div class="section-title">Generate Docs</div>
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>Generate Docs</span>
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span class="cred-dot cred-dot-unknown" id="credDot" onclick="handleCredCheck()" title="Click to check credentials" style="cursor:pointer;"></span>
+        <span onclick="handleSetup()" style="cursor:pointer;font-size:14px;" title="Settings">&#9881;</span>
+      </span>
+    </div>
     <button class="btn btn-primary" id="runBtn" onclick="handleRun()">
       <span id="runIcon">&#9654;</span>
       <span id="runText">Generate Branch Docs</span>
@@ -326,11 +389,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     </div>
   </div>
 
-  <div class="section mt-12">
-    <button class="btn btn-secondary" onclick="handleSetup()">
-      &#9881; Settings
-    </button>
+  <div class="section" id="historySection">
+    <div class="section-title">History</div>
+    <div id="historyList" class="history-list"></div>
   </div>
+
 
 <script>
   const vscode = acquireVsCodeApi();
@@ -348,6 +411,42 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   function openTech() { vscode.postMessage({ command: 'openUrl', url: currentState.techUrl }); }
   function openSummary() { vscode.postMessage({ command: 'openUrl', url: currentState.summaryUrl }); }
 
+  function renderHistory(history) {
+    const list = document.getElementById('historyList');
+    if (!history || history.length === 0) {
+      list.innerHTML = '<p style="font-size:11px;color:var(--vscode-descriptionForeground)">No docs generated yet</p>';
+      return;
+    }
+    list.innerHTML = history.map(item => {
+      const date = new Date(item.lastUpdated).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return '<div class="history-item" onclick="openHistory(\\'' + item.branch + '\\')">' +
+        '<div class="history-branch">' + item.branch + '</div>' +
+        '<div class="history-date">' + date + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  function openHistory(branch) { vscode.postMessage({ command: 'openHistory', branch }); }
+
+  function handleCredCheck() { vscode.postMessage({ command: 'checkCredentials' }); }
+
+  function renderCredStatus(credStatus) {
+    const dot = document.getElementById('credDot');
+    dot.className = 'cred-dot';
+
+    if (credStatus.checking) {
+      dot.classList.add('cred-dot-checking');
+      dot.title = 'Checking credentials...';
+      return;
+    }
+
+    if (credStatus.allOk) {
+      dot.classList.add('cred-dot-green');
+    } else {
+      dot.classList.add('cred-dot-red');
+    }
+    dot.title = (credStatus.details || []).join('\\n');
+  }
+
   function show(id) { document.getElementById(id).classList.remove('hidden'); }
   function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
@@ -356,6 +455,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (msg.type === 'stateUpdate') {
       currentState = msg.state;
       render(currentState);
+    }
+    if (msg.type === 'historyUpdate') {
+      renderHistory(msg.history);
+    }
+    if (msg.type === 'credStatus') {
+      renderCredStatus(msg);
     }
     if (msg.type === 'initBaseBranch' && msg.value) {
       document.getElementById('baseBranch').value = msg.value;

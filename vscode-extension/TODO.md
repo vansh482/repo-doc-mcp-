@@ -24,7 +24,7 @@ All possible improvements, features, and enhancements. Organized by priority and
 ### Quality
 - [ ] **Unit tests** — Add tests for git/diff.ts, scanner, markdown converter, tracker
 - [ ] **Integration tests** — VS Code extension test framework with mocked APIs
-- [ ] **Prompt versioning** — Track prompt template versions so docs note which prompt generated them
+- [x] **Prompt versioning** — Track prompt template versions so docs note which prompt generated them
 
 ---
 
@@ -32,21 +32,21 @@ All possible improvements, features, and enhancements. Organized by priority and
 
 ### Features
 
-- [ ] **Selective file exclusion** — Let users pick which changed files to inot nclude in the diff (via quick pick)
+- [x] **Selective file exclusion** — Let users pick which changed files to include in the diff (via quick pick)
 
-- [ ] **Draft mode** — Publish as Confluence draft (unpublished) for review before making visible
+- [x] **Draft mode** — Publish as Confluence draft (unpublished) for review before making visible
 
 ### UX Improvements
 -
-- [ ] **History panel** — Show list of previously generated docs with links, timestamps, branches
+- [x] **History panel** — Show list of previously generated docs with links, timestamps, branches
 - [ ] **Quick pick for common actions** — Cmd+Shift+P menu with "Generate", "View Last", "Open in Confluence"
--
-- [ ] **Onboarding walkthrough** — VS Code native walkthrough API (contributes.walkthroughs) for first-time setup
+
+- [x] **Onboarding walkthrough** — VS Code native walkthrough API (contributes.walkthroughs) for first-time setup
 
 ### Auth & Security
 - [ ] **OAuth for Confluence** — Atlassian OAuth 2.0 (3LO) flow for more secure authentication
-- [ ] **Token refresh/rotation** — Detect expired tokens and prompt for re-auth
-- [ ] **Credential validation on save** — Test API key / Confluence token when user saves settings
+- [x] **Token refresh/rotation** — Detect expired tokens and prompt for re-auth
+- [x] **Credential validation on save** — Test API key / Confluence token when user saves settings
 
 ---
 
@@ -121,10 +121,10 @@ Errors are logged to VS Code Output Channel ("Repo Doc Generator"). Users must m
 ## Tech Debt & Housekeeping
 
 - [ ] **DocPublisher interface** — Abstract publisher behind `DocPublisher { createPage(), updatePage(), getPageVersion() }` + factory pattern. Prerequisite for multi-publisher support. See Publishers section.
-- [ ] **Strict TypeScript** — Enable strict mode, fix any resulting errors
+- [ ] **Strict TypeScript** — Already enabled (tsconfig has strict: true)
 - [ ] **Bundle with esbuild** — Reduce extension size and load time (currently just tsc)
-- [ ] **CI/CD pipeline** — GitHub Actions for lint, test, package, publish
-- [ ] **Changelog** — Maintain CHANGELOG.md following Keep a Changelog format
+- [x] **CI/CD pipeline** — GitHub Actions for lint, test, package, publish
+- [x] **Changelog** — Maintain CHANGELOG.md following Keep a Changelog format
 - [ ] **Screenshots for marketplace** — Generate demo screenshots/GIFs for the listing
 
 ---

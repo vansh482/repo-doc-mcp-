@@ -31,4 +31,11 @@ export class DocTracker {
   getAllTracked(): Record<string, BranchPages> {
     return this.state.get<Record<string, BranchPages>>(STORAGE_KEY) || {};
   }
+
+  getHistory(): Array<{ branch: string; pages: BranchPages }> {
+    const all = this.getAllTracked();
+    return Object.entries(all)
+      .map(([branch, pages]) => ({ branch, pages }))
+      .sort((a, b) => new Date(b.pages.lastUpdated).getTime() - new Date(a.pages.lastUpdated).getTime());
+  }
 }

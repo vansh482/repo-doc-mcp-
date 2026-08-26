@@ -1,14 +1,16 @@
 import * as vscode from 'vscode';
 import { SecretStore } from './config/secrets';
 import { getConfig, isConfigured } from './config/settings';
+import { validateConfluenceCredentials, validateAnthropicKey, validateOpenAIKey } from './config/validator';
 import { runSetupWizard } from './config/wizard';
-import { getBranchDiff, detectBaseBranch } from './git/diff';
+import { getBranchDiff, detectBaseBranch, filterDiffByFiles } from './git/diff';
 import { scanRepo } from './scanner/scanner';
 import { createProvider } from './llm/provider';
 import { generateDocs } from './generator/generator';
 import { ConfluencePublisher } from './publisher/confluence';
 import { DocTracker } from './tracker/tracker';
 import { SidebarProvider } from './webview/sidebarProvider';
+import { checkTokenHealth, promptForReauth } from './config/tokenCheck';
 
 let secretStore: SecretStore;
 let docTracker: DocTracker;
@@ -31,10 +33,14 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('repoDoc.setup', () => handleSetup()),
     vscode.commands.registerCommand('repoDoc.viewDocs', () => handleViewDocs()),
     vscode.commands.registerCommand('repoDoc.cancel', () => handleCancel()),
+    vscode.commands.registerCommand('repoDoc.validateCredentials', () => handleValidateCredentials()),
     outputChannel
   );
 
   checkFirstRun(context);
+
+  // Auto-validate credentials when sidebar becomes visible
+  setTimeout(() => handleValidateCredentials(false), 2000);
 }
 
 async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
@@ -54,6 +60,9 @@ async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
       if (completed) {
         await context.globalState.update('repoDoc.hasCompletedSetup', true);
       }
+    } else {
+      // Show walkthrough for users who click "Later"
+      vscode.commands.executeCommand('workbench.action.openWalkthrough', 'devcraft-tools.repo-doc-generator#repoDoc.getStarted');
     }
   }
 }
@@ -63,6 +72,65 @@ function handleCancel(): void {
     cancelTokenSource.cancel();
     cancelTokenSource.dispose();
     cancelTokenSource = undefined;
+  }
+}
+
+async function handleValidateCredentials(showPopup: boolean = true): Promise<void> {
+  const config = getConfig();
+  const cfgRaw = vscode.workspace.getConfiguration('repoDoc');
+
+  sidebar.sendCredStatus({ checking: true });
+
+  const results: string[] = [];
+
+  // Validate Confluence
+  const confluenceToken = await secretStore.getConfluenceToken() || cfgRaw.get<string>('confluence.apiToken') || '';
+  const confluenceEmail = await secretStore.getConfluenceEmail() || cfgRaw.get<string>('confluence.email') || '';
+
+  if (config.confluence.baseUrl && confluenceEmail && confluenceToken) {
+    const cfResult = await validateConfluenceCredentials(config.confluence.baseUrl, confluenceEmail, confluenceToken);
+    results.push(cfResult.valid ? '✓ Confluence: connected' : `✗ Confluence: ${cfResult.error}`);
+  } else {
+    results.push('⊘ Confluence: not configured');
+  }
+
+  // Validate LLM provider
+  if (config.llm.provider === 'anthropic') {
+    const key = await secretStore.getApiKey('anthropic');
+    if (key) {
+      const result = await validateAnthropicKey(key);
+      results.push(result.valid ? '✓ Anthropic: connected' : `✗ Anthropic: ${result.error}`);
+    } else {
+      results.push('⊘ Anthropic: no API key');
+    }
+  } else if (config.llm.provider === 'openai') {
+    const key = await secretStore.getApiKey('openai');
+    if (key) {
+      const result = await validateOpenAIKey(key);
+      results.push(result.valid ? '✓ OpenAI: connected' : `✗ OpenAI: ${result.error}`);
+    } else {
+      results.push('⊘ OpenAI: no API key');
+    }
+  } else if (config.llm.provider === 'bedrock') {
+    results.push('✓ Bedrock: configured (IAM auth)');
+  }
+
+  const allOk = results.every(r => r.startsWith('✓') || r.startsWith('⊘'));
+  const summary = allOk ? 'All credentials OK' : results.find(r => r.startsWith('✗'))?.substring(2) || 'Issues found';
+
+  sidebar.sendCredStatus({ allOk, summary, details: results });
+  outputChannel.appendLine(`[RepoDoc] Credential validation: ${results.join(' | ')}`);
+
+  if (showPopup) {
+    const action = allOk
+      ? await vscode.window.showInformationMessage(results.join('\n'), 'Re-check')
+      : await vscode.window.showWarningMessage(results.join('\n'), 'Re-check', 'Open Settings');
+
+    if (action === 'Re-check') {
+      handleValidateCredentials(true);
+    } else if (action === 'Open Settings') {
+      vscode.commands.executeCommand('repoDoc.setup');
+    }
   }
 }
 
@@ -112,7 +180,33 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
       return;
     }
 
-    if (!diff.diffContent && diff.changedFiles.length === 0) {
+    // File selection (if enabled)
+    let activeDiff = diff;
+
+    if (config.promptForFileSelection && diff.changedFiles.length > 1) {
+      const items = diff.changedFiles.map(file => ({
+        label: file,
+        picked: true,
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        canPickMany: true,
+        placeHolder: `Select files to include (${diff.changedFiles.length} changed)`,
+        title: 'File Selection',
+      });
+
+      if (!selected) {
+        sidebar.updateState({ status: 'idle' });
+        return; // User cancelled
+      }
+
+      if (selected.length < diff.changedFiles.length) {
+        activeDiff = filterDiffByFiles(diff, selected.map(s => s.label));
+        outputChannel.appendLine(`[RepoDoc] File selection: ${selected.length}/${diff.changedFiles.length} files included`);
+      }
+    }
+
+    if (!activeDiff.diffContent && activeDiff.changedFiles.length === 0) {
       sidebar.updateState({ status: 'idle' });
       vscode.window.showInformationMessage(
         `No changes found on branch "${diff.currentBranch}" compared to "${baseBranch}".`
@@ -122,7 +216,7 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
 
     sidebar.updateState({ branch: diff.currentBranch, baseBranch });
     outputChannel.appendLine(`\n[RepoDoc] ═══ Run started: ${diff.currentBranch} vs ${baseBranch} ═══`);
-    outputChannel.appendLine(`[RepoDoc] Step 1: ${diff.changedFiles.length} files changed, ${diff.commitMessages.length} commits`);
+    outputChannel.appendLine(`[RepoDoc] Step 1: ${activeDiff.changedFiles.length} files changed, ${diff.commitMessages.length} commits`);
 
     if (diff.truncated) {
       outputChannel.appendLine(`[RepoDoc] Warning: Diff truncated (${Math.round(diff.originalSize / 1024)}KB). Some files may not appear in generated docs.`);
@@ -144,6 +238,18 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
 
     // Step 3: LLM generation
     sidebar.updateState({ step: 'Step 3/5: Generating docs with AI (30-60s)...' });
+
+    // Pre-flight token check
+    const tokenStatus = await checkTokenHealth(config.llm.provider as 'anthropic' | 'openai' | 'bedrock', secretStore);
+    if (!tokenStatus.valid) {
+      outputChannel.appendLine(`[RepoDoc] Token issue: ${tokenStatus.message}`);
+      const reauthed = await promptForReauth(config.llm.provider, tokenStatus.message, secretStore);
+      if (!reauthed) {
+        sidebar.updateState({ status: 'error', error: `${config.llm.provider}: ${tokenStatus.message}. Run setup to update credentials.`, elapsed: elapsed() });
+        return;
+      }
+    }
+
     const apiKey = await secretStore.getApiKey(config.llm.provider as 'anthropic' | 'openai');
     const provider = createProvider(config.llm.provider as any, {
       apiKey: apiKey || undefined,
@@ -153,7 +259,7 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
     });
 
     const instructions = sidebar.customInstructions || undefined;
-    const docs = await generateDocs(provider, diff, repoContext, config.docLength, instructions);
+    const docs = await generateDocs(provider, activeDiff, repoContext, config.docLength, instructions);
     sidebar.updateState({ step: 'Step 3/5: AI generation complete' });
 
     outputChannel.appendLine(`[RepoDoc] Step 3: AI generation complete (${docs.technical.length + docs.nonTechnical.length} chars output)`);
@@ -162,6 +268,7 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
         `[RepoDoc] Tokens: ${docs.usage.inputTokens} input + ${docs.usage.outputTokens} output = ${docs.usage.inputTokens + docs.usage.outputTokens} total`
       );
     }
+    outputChannel.appendLine(`[RepoDoc] Prompt version: ${docs.promptVersion}`);
 
     if (token.isCancellationRequested) {
       sidebar.updateState({ status: 'idle' });
@@ -236,8 +343,9 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
 
       try {
         await vscode.workspace.fs.createDirectory(repodocDir);
-        await vscode.workspace.fs.writeFile(techFile, Buffer.from(docs.technical, 'utf-8'));
-        await vscode.workspace.fs.writeFile(summaryFile, Buffer.from(docs.nonTechnical, 'utf-8'));
+        const metaHeader = `<!-- Generated by RepoDoc | Prompt: ${docs.promptVersion} | ${new Date().toISOString()} -->\n\n`;
+        await vscode.workspace.fs.writeFile(techFile, Buffer.from(metaHeader + docs.technical, 'utf-8'));
+        await vscode.workspace.fs.writeFile(summaryFile, Buffer.from(metaHeader + docs.nonTechnical, 'utf-8'));
 
         sidebar.updateState({
           status: 'error',
@@ -272,6 +380,10 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
       summaryUrl: nonTechResult!.url,
       branch: diff.currentBranch,
     });
+
+    sidebar.sendHistory(
+      docTracker.getHistory().map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated }))
+    );
 
     outputChannel.appendLine(`[RepoDoc] Step 5: Done!`);
     outputChannel.appendLine(`[RepoDoc] Technical: ${techResult!.url}`);

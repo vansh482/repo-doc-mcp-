@@ -15,6 +15,7 @@ export interface RepoDocConfig {
   };
   baseBranch: string;
   docLength: DocLength;
+  promptForFileSelection: boolean;
   bedrock: {
     region: string;
     profile: string;
@@ -36,6 +37,7 @@ export function getConfig(): RepoDocConfig {
     },
     baseBranch: cfg.get<string>("baseBranch") || "main",
     docLength: cfg.get<DocLength>("docLength") || "concise",
+    promptForFileSelection: cfg.get<boolean>("promptForFileSelection") || false,
     bedrock: {
       region: cfg.get<string>("bedrock.region") || "us-west-2",
       profile: cfg.get<string>("bedrock.profile") || "",

@@ -122,6 +122,32 @@ function truncateDiffAtFileBoundaries(
   return { content: result, truncated: true };
 }
 
+export function filterDiffByFiles(diff: BranchDiff, selectedFiles: string[]): BranchDiff {
+  const selectedSet = new Set(selectedFiles);
+
+  // Filter the diff content to only include selected files
+  const filteredDiffLines: string[] = [];
+  let includeCurrentFile = false;
+
+  for (const line of diff.diffContent.split('\n')) {
+    if (line.startsWith('diff --git')) {
+      // Extract filename from "diff --git a/path b/path"
+      const match = line.match(/diff --git a\/(.+?) b\/(.+)/);
+      const filePath = match ? match[2] : '';
+      includeCurrentFile = selectedSet.has(filePath);
+    }
+    if (includeCurrentFile) {
+      filteredDiffLines.push(line);
+    }
+  }
+
+  return {
+    ...diff,
+    diffContent: filteredDiffLines.join('\n'),
+    changedFiles: diff.changedFiles.filter(f => selectedSet.has(f)),
+  };
+}
+
 export async function getBranchDiff(
   repoPath: string,
   baseBranch: string,

@@ -2,7 +2,7 @@ import type { LLMProvider, TokenUsage } from '../llm/provider';
 import type { BranchDiff } from '../git/diff';
 import type { RepoContext } from '../scanner/scanner';
 import type { DocLength } from '../config/settings';
-import { SYSTEM_PROMPT, buildTechnicalPrompt, buildNonTechnicalPrompt } from './prompts';
+import { SYSTEM_PROMPT, PROMPT_VERSION, buildTechnicalPrompt, buildNonTechnicalPrompt } from './prompts';
 
 export interface GeneratedDocs {
   technical: string;
@@ -10,6 +10,7 @@ export interface GeneratedDocs {
   branch: string;
   generatedAt: string;
   usage?: TokenUsage;
+  promptVersion: string;
 }
 
 export async function generateDocs(
@@ -38,5 +39,6 @@ export async function generateDocs(
     branch: diff.currentBranch,
     generatedAt: new Date().toISOString(),
     usage: totalUsage,
+    promptVersion: PROMPT_VERSION,
   };
 }

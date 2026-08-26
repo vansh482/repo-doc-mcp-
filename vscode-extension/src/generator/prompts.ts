@@ -2,6 +2,8 @@ import type { BranchDiff } from '../git/diff';
 import type { RepoContext } from '../scanner/scanner';
 import type { DocLength } from '../config/settings';
 
+export const PROMPT_VERSION = '2.0.0';
+
 const TECH_WORD_LIMITS: Record<DocLength, string> = {
   concise: '500-800 words',
   standard: '800-1200 words',

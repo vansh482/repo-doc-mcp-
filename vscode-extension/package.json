@@ -54,6 +54,12 @@
         "title": "Cancel Generation",
         "category": "Repo Doc",
         "icon": "$(stop)"
+      },
+      {
+        "command": "repoDoc.validateCredentials",
+        "title": "Validate Credentials",
+        "category": "Repo Doc",
+        "icon": "$(shield)"
       }
     ],
     "viewsContainers": {
@@ -127,6 +133,11 @@
           "enum": ["concise", "standard", "detailed"],
           "default": "concise",
           "description": "Doc verbosity: concise (~500 words), standard (~1000 words), detailed (~2000 words)."
+        },
+        "repoDoc.promptForFileSelection": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a file picker before generation to exclude files from the diff."
         }
       }
     },
@@ -145,7 +156,51 @@
           "when": "workspaceFolderCount > 0"
         }
       ]
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "repoDoc.getStarted",
+        "title": "Get Started with Repo Doc Generator",
+        "description": "Set up your LLM provider and Confluence connection to start generating branch documentation.",
+        "steps": [
+          {
+            "id": "repoDoc.walkthrough.openSidebar",
+            "title": "Open the Sidebar",
+            "description": "Click the Repo Doc icon in the Activity Bar (left side) to open the sidebar panel.\n\n[Open Sidebar](command:repoDocSidebar.focus)",
+            "media": {
+              "markdown": "docs/walkthrough/open-sidebar.md"
+            }
+          },
+          {
+            "id": "repoDoc.walkthrough.configureLLM",
+            "title": "Configure Your LLM Provider",
+            "description": "Choose your AI provider (Anthropic, OpenAI, or AWS Bedrock) and add your API key.\n\n[Open Settings](command:repoDoc.setup)",
+            "media": {
+              "markdown": "docs/walkthrough/configure-llm.md"
+            }
+          },
+          {
+            "id": "repoDoc.walkthrough.configureConfluence",
+            "title": "Connect Confluence",
+            "description": "Add your Confluence base URL, space key, and API token to enable publishing.\n\n[Open Settings](command:repoDoc.setup)",
+            "media": {
+              "markdown": "docs/walkthrough/configure-confluence.md"
+            }
+          },
+          {
+            "id": "repoDoc.walkthrough.generateDocs",
+            "title": "Generate Your First Doc",
+            "description": "Switch to a feature branch and click Generate to create your first branch documentation.\n\n[Generate Docs](command:repoDoc.run)",
+            "media": {
+              "markdown": "docs/walkthrough/generate-docs.md"
+            },
+            "completionEvents": [
+              "onCommand:repoDoc.run"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
