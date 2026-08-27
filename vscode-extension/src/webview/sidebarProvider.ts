@@ -18,6 +18,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   public customInstructions: string = '';
   public baseBranchOverride: string = '';
   public onDidResolve: (() => void) | undefined;
+  public onDeleteHistory: ((branch: string) => void) | undefined;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -59,6 +60,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           break;
         case 'openHistory':
           vscode.commands.executeCommand('repoDoc.viewDocs');
+          break;
+        case 'deleteHistory':
+          if (this.onDeleteHistory) {
+            this.onDeleteHistory(message.branch);
+          }
           break;
         case 'checkCredentials':
           vscode.commands.executeCommand('repoDoc.validateCredentials');
@@ -320,10 +326,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     margin-bottom: 6px;
     cursor: pointer;
     transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
   .history-item:hover { background: var(--vscode-list-hoverBackground); }
-  .history-branch { font-size: 12px; font-weight: 500; }
+  .history-info { flex: 1; min-width: 0; }
+  .history-branch { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .history-date { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+  .history-delete { opacity: 0; font-size: 14px; color: var(--vscode-errorForeground); cursor: pointer; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
+  .history-item:hover .history-delete { opacity: 1; }
+  .history-delete:hover { background: var(--vscode-toolbar-hoverBackground); }
 
   .hidden { display: none; }
   .mt-8 { margin-top: 8px; }
@@ -424,13 +437,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
     list.innerHTML = history.map(item => {
       const date = new Date(item.lastUpdated).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      return '<div class="history-item" onclick="openHistory(\\'' + item.branch + '\\')">' +
-        '<div class="history-branch">' + item.branch + '</div>' +
-        '<div class="history-date">' + date + '</div>' +
+      const branch = item.branch.replace(/'/g, "\\\\'");
+      return '<div class="history-item">' +
+        '<div class="history-info" onclick="openHistory(\\'' + branch + '\\')">' +
+          '<div class="history-branch">' + item.branch + '</div>' +
+          '<div class="history-date">' + date + '</div>' +
+        '</div>' +
+        '<span class="history-delete" onclick="event.stopPropagation();deleteHistory(\\'' + branch + '\\')" title="Remove from history">&times;</span>' +
       '</div>';
     }).join('');
   }
   function openHistory(branch) { vscode.postMessage({ command: 'openHistory', branch }); }
+  function deleteHistory(branch) { vscode.postMessage({ command: 'deleteHistory', branch }); }
 
   function handleCredCheck() { vscode.postMessage({ command: 'checkCredentials' }); }
 

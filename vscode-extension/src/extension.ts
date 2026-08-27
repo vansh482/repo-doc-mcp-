@@ -31,6 +31,11 @@ export function activate(context: vscode.ExtensionContext): void {
     sidebar.sendHistory(history);
     handleValidateCredentials(false);
   };
+  sidebar.onDeleteHistory = (branch: string) => {
+    docTracker.removeBranch(branch);
+    const history = docTracker.getHistory().map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated }));
+    sidebar.sendHistory(history);
+  };
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(SidebarProvider.viewType, sidebar),
