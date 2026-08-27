@@ -2,7 +2,7 @@
   "name": "repo-doc-generator",
   "displayName": "Repo Doc Generator",
   "description": "Generate AI-powered branch documentation — see what your branch changed vs main, published to Confluence automatically.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "devcraft-tools",
   "license": "MIT",
   "repository": {
