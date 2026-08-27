@@ -113,6 +113,11 @@
           "default": "",
           "description": "ID of the parent page under which branch docs will be created."
         },
+        "repoDoc.confluence.email": {
+          "type": "string",
+          "default": "",
+          "description": "Email address for Confluence API authentication."
+        },
         "repoDoc.baseBranch": {
           "type": "string",
           "default": "main",
