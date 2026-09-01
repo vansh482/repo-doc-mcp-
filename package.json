@@ -1,0 +1,11 @@
+{
+  "name": "repodoc",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "build:core": "npm run build --workspace=@repodoc/core",
+    "build:vscode": "npm run build --workspace=repo-doc-generator",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
