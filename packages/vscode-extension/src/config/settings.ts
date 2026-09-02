@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { SecretStore } from "./secrets";
+import type { DocLength } from "@repodoc/core";
 
-export type DocLength = "concise" | "standard" | "detailed";
+export type { DocLength };
 
 export interface RepoDocConfig {
   llm: {
