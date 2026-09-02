@@ -6,6 +6,11 @@ export type { ProgressReporter, ProgressStep } from './progress/types';
 export { nullProgress } from './progress/types';
 export type { DocPublisher, PublishResult, PublisherConfig } from './publisher/types';
 export type { ContentTransformer, ContentFormat } from './transformer/types';
+export { ConfluenceTransformer } from './transformer/confluence';
+
+// Publisher implementations
+export { ConfluencePublisher } from './publisher/confluence';
+export { PublisherRegistry } from './publisher/registry';
 
 // Git
 export type { BranchDiff } from './git/diff';
