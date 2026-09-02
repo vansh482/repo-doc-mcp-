@@ -1,19 +1,23 @@
 import * as vscode from 'vscode';
+import {
+  runPipeline, NoDiffError,
+  getBranchDiff, detectBaseBranch,
+  PublisherRegistry, ConfluencePublisher, ConfluenceTransformer,
+} from '@repodoc/core';
+import type { ContentTransformer, ProgressStep } from '@repodoc/core';
 import { SecretStore } from './config/secrets';
 import { getConfig, isConfigured } from './config/settings';
 import { validateConfluenceCredentials, validateAnthropicKey, validateOpenAIKey } from './config/validator';
 import { runSetupWizard } from './config/wizard';
-import { getBranchDiff, detectBaseBranch, filterDiffByFiles } from '@repodoc/core';
-import { scanRepo } from '@repodoc/core';
-import { createProvider } from '@repodoc/core';
-import { generateDocs } from '@repodoc/core';
-import { ConfluencePublisher } from './publisher/confluence';
-import { DocTracker } from './tracker/tracker';
 import { SidebarProvider } from './webview/sidebarProvider';
 import { checkTokenHealth, promptForReauth } from './config/tokenCheck';
+import {
+  VsCodeAuthProvider, VsCodeConfigProvider,
+  VsCodeStorageProvider, VsCodeProgressReporter,
+} from './adapters';
 
 let secretStore: SecretStore;
-let docTracker: DocTracker;
+let storageProvider: VsCodeStorageProvider;
 let outputChannel: vscode.OutputChannel;
 let extensionUri: vscode.Uri;
 let sidebar: SidebarProvider;
@@ -22,19 +26,19 @@ let cancelTokenSource: vscode.CancellationTokenSource | undefined;
 export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Repo Doc Generator');
   secretStore = new SecretStore(context.secrets);
-  docTracker = new DocTracker(context.workspaceState);
+  storageProvider = new VsCodeStorageProvider(context.workspaceState);
   extensionUri = context.extensionUri;
 
   sidebar = new SidebarProvider(context.extensionUri);
-  sidebar.onDidResolve = () => {
-    const history = docTracker.getHistory().map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated }));
-    sidebar.sendHistory(history);
+  sidebar.onDidResolve = async () => {
+    const history = await storageProvider.getHistory();
+    sidebar.sendHistory(history.map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated })));
     handleValidateCredentials(false);
   };
-  sidebar.onDeleteHistory = (branch: string) => {
-    docTracker.removeBranch(branch);
-    const history = docTracker.getHistory().map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated }));
-    sidebar.sendHistory(history);
+  sidebar.onDeleteHistory = async (branch: string) => {
+    await storageProvider.removeBranch(branch);
+    const history = await storageProvider.getHistory();
+    sidebar.sendHistory(history.map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated })));
   };
 
   context.subscriptions.push(
@@ -68,7 +72,6 @@ async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
         await context.globalState.update('repoDoc.hasCompletedSetup', true);
       }
     } else {
-      // Show walkthrough for users who click "Later"
       vscode.commands.executeCommand('workbench.action.openWalkthrough', 'devcraft-tools.repo-doc-generator#repoDoc.getStarted');
     }
   }
@@ -90,7 +93,6 @@ async function handleValidateCredentials(showPopup: boolean = true): Promise<voi
 
   const results: string[] = [];
 
-  // Validate Confluence
   const confluenceToken = await secretStore.getConfluenceToken() || cfgRaw.get<string>('confluence.apiToken') || '';
   const confluenceEmail = await secretStore.getConfluenceEmail() || cfgRaw.get<string>('confluence.email') || '';
 
@@ -101,7 +103,6 @@ async function handleValidateCredentials(showPopup: boolean = true): Promise<voi
     results.push('⊘ Confluence: not configured');
   }
 
-  // Validate LLM provider
   if (config.llm.provider === 'anthropic') {
     const key = await secretStore.getApiKey('anthropic');
     if (key) {
@@ -177,76 +178,39 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
   }, 1000);
 
   try {
-    // Step 1: Git diff
-    sidebar.updateState({ step: 'Step 1/5: Detecting branch & computing diff...' });
-    const baseBranch = sidebar.baseBranchOverride || config.baseBranch || await detectBaseBranch(repoPath);
-    const diff = await getBranchDiff(repoPath, baseBranch);
+    // Pre-flight: file selection (needs diff before pipeline)
+    let selectedFiles: string[] | undefined;
+
+    if (config.promptForFileSelection) {
+      const baseBranch = sidebar.baseBranchOverride || config.baseBranch || await detectBaseBranch(repoPath);
+      const preDiff = await getBranchDiff(repoPath, baseBranch);
+
+      if (preDiff.changedFiles.length > 1) {
+        const items = preDiff.changedFiles.map(file => ({ label: file, picked: true }));
+        const selected = await vscode.window.showQuickPick(items, {
+          canPickMany: true,
+          placeHolder: `Select files to include (${preDiff.changedFiles.length} changed)`,
+          title: 'File Selection',
+        });
+
+        if (!selected) {
+          sidebar.updateState({ status: 'idle' });
+          return;
+        }
+
+        if (selected.length < preDiff.changedFiles.length) {
+          selectedFiles = selected.map(s => s.label);
+          outputChannel.appendLine(`[RepoDoc] File selection: ${selected.length}/${preDiff.changedFiles.length} files included`);
+        }
+      }
+    }
 
     if (token.isCancellationRequested) {
       sidebar.updateState({ status: 'idle' });
       return;
     }
 
-    // File selection (if enabled)
-    let activeDiff = diff;
-
-    if (config.promptForFileSelection && diff.changedFiles.length > 1) {
-      const items = diff.changedFiles.map(file => ({
-        label: file,
-        picked: true,
-      }));
-
-      const selected = await vscode.window.showQuickPick(items, {
-        canPickMany: true,
-        placeHolder: `Select files to include (${diff.changedFiles.length} changed)`,
-        title: 'File Selection',
-      });
-
-      if (!selected) {
-        sidebar.updateState({ status: 'idle' });
-        return; // User cancelled
-      }
-
-      if (selected.length < diff.changedFiles.length) {
-        activeDiff = filterDiffByFiles(diff, selected.map(s => s.label));
-        outputChannel.appendLine(`[RepoDoc] File selection: ${selected.length}/${diff.changedFiles.length} files included`);
-      }
-    }
-
-    if (!activeDiff.diffContent && activeDiff.changedFiles.length === 0) {
-      sidebar.updateState({ status: 'idle' });
-      vscode.window.showInformationMessage(
-        `No changes found on branch "${diff.currentBranch}" compared to "${baseBranch}".`
-      );
-      return;
-    }
-
-    sidebar.updateState({ branch: diff.currentBranch, baseBranch });
-    outputChannel.appendLine(`\n[RepoDoc] ═══ Run started: ${diff.currentBranch} vs ${baseBranch} ═══`);
-    outputChannel.appendLine(`[RepoDoc] Step 1: ${activeDiff.changedFiles.length} files changed, ${diff.commitMessages.length} commits`);
-
-    if (diff.truncated) {
-      outputChannel.appendLine(`[RepoDoc] Warning: Diff truncated (${Math.round(diff.originalSize / 1024)}KB). Some files may not appear in generated docs.`);
-      vscode.window.showWarningMessage(
-        `Large diff (${diff.changedFiles.length} files, ${Math.round(diff.originalSize / 1024)}KB). Doc quality may be reduced for skipped files.`
-      );
-    }
-
-    // Step 2: Scan repo
-    sidebar.updateState({ step: 'Step 2/5: Scanning repo structure...' });
-    const repoContext = await scanRepo(repoPath);
-    outputChannel.appendLine(`[RepoDoc] Step 2: Scanned ${repoContext.totalFiles} files across ${Object.keys(repoContext.languages).length} languages`);
-    sidebar.updateState({ step: `Step 2/5: Scanned ${repoContext.totalFiles} files` });
-
-    if (token.isCancellationRequested) {
-      sidebar.updateState({ status: 'idle' });
-      return;
-    }
-
-    // Step 3: LLM generation
-    sidebar.updateState({ step: 'Step 3/5: Generating docs with AI (30-60s)...' });
-
-    // Pre-flight token check
+    // Pre-flight: token health check
     const tokenStatus = await checkTokenHealth(config.llm.provider as 'anthropic' | 'openai' | 'bedrock', secretStore);
     if (!tokenStatus.valid) {
       outputChannel.appendLine(`[RepoDoc] Token issue: ${tokenStatus.message}`);
@@ -257,165 +221,137 @@ async function handleRun(context: vscode.ExtensionContext): Promise<void> {
       }
     }
 
-    const apiKey = await secretStore.getApiKey(config.llm.provider as 'anthropic' | 'openai');
-    const provider = createProvider(config.llm.provider as any, {
-      apiKey: apiKey || undefined,
-      model: config.llm.model,
-      region: config.bedrock.region,
-      profile: config.bedrock.profile,
+    // Wire up adapters
+    const auth = new VsCodeAuthProvider(secretStore);
+    const configProvider = new VsCodeConfigProvider();
+    const progress = new VsCodeProgressReporter((step: ProgressStep) => {
+      const stepLabels: Record<string, string> = {
+        config: 'Step 1/5',
+        git: 'Step 1/5',
+        scan: 'Step 2/5',
+        llm: 'Step 3/5',
+        generate: 'Step 3/5',
+        publish: 'Step 4/5',
+        done: 'Step 5/5',
+      };
+      const label = stepLabels[step.step] || '';
+      sidebar.updateState({ step: `${label}: ${step.message}` });
+      outputChannel.appendLine(`[RepoDoc] ${step.message}`);
     });
 
-    const instructions = sidebar.customInstructions || undefined;
-    const docs = await generateDocs(provider, activeDiff, repoContext, config.docLength, instructions);
-    sidebar.updateState({ step: 'Step 3/5: AI generation complete' });
+    // Wire up publisher registry + transformers
+    const registry = new PublisherRegistry();
+    const confluencePublisher = new ConfluencePublisher();
+    registry.register(confluencePublisher);
 
-    outputChannel.appendLine(`[RepoDoc] Step 3: AI generation complete (${docs.technical.length + docs.nonTechnical.length} chars output)`);
-    if (docs.usage) {
-      outputChannel.appendLine(
-        `[RepoDoc] Tokens: ${docs.usage.inputTokens} input + ${docs.usage.outputTokens} output = ${docs.usage.inputTokens + docs.usage.outputTokens} total`
-      );
-    }
-    outputChannel.appendLine(`[RepoDoc] Prompt version: ${docs.promptVersion}`);
+    const transformers = new Map<string, ContentTransformer>();
+    transformers.set('confluence', new ConfluenceTransformer());
 
-    if (token.isCancellationRequested) {
-      sidebar.updateState({ status: 'idle' });
-      return;
-    }
+    // Run core pipeline
+    outputChannel.appendLine(`\n[RepoDoc] ═══ Run started ═══`);
 
-    // Step 4: Publish to Confluence
-    sidebar.updateState({ step: 'Step 4/5: Publishing to Confluence...' });
+    const result = await runPipeline(
+      { auth, config: configProvider, storage: storageProvider, progress },
+      {
+        repoPath,
+        baseBranchOverride: sidebar.baseBranchOverride || undefined,
+        selectedFiles,
+        customInstructions: sidebar.customInstructions || undefined,
+      },
+      registry,
+      transformers,
+    );
 
-    const existingPages = docTracker.getPages(diff.currentBranch);
-    let techResult: { pageId: string; url: string } | undefined;
-    let nonTechResult: { pageId: string; url: string } | undefined;
-
-    try {
-      const cfgRaw = vscode.workspace.getConfiguration('repoDoc');
-      const confluenceToken = await secretStore.getConfluenceToken() || cfgRaw.get<string>('confluence.apiToken') || '';
-      const confluenceEmail = await secretStore.getConfluenceEmail() || cfgRaw.get<string>('confluence.email') || '';
-
-      if (!confluenceToken || !confluenceEmail) {
-        throw new Error('Confluence credentials not found. Run setup again.');
-      }
-
-      const publisher = new ConfluencePublisher({
-        baseUrl: config.confluence.baseUrl,
-        email: confluenceEmail,
-        apiToken: confluenceToken,
-        spaceKey: config.confluence.spaceKey,
-        parentPageId: config.confluence.parentPageId,
-      });
-
-      const techTitle = `${diff.currentBranch} — Technical`;
-      const nonTechTitle = `${diff.currentBranch} — Summary`;
-
-      if (existingPages) {
-        const techVersion = await publisher.getPageVersion(existingPages.technicalPageId);
-        techResult = await publisher.updatePage(
-          existingPages.technicalPageId, techTitle, docs.technical, techVersion
-        );
-
-        const nonTechVersion = await publisher.getPageVersion(existingPages.nonTechnicalPageId);
-        nonTechResult = await publisher.updatePage(
-          existingPages.nonTechnicalPageId, nonTechTitle, docs.nonTechnical, nonTechVersion
-        );
-
-        outputChannel.appendLine(`[RepoDoc] Step 4: Updated existing pages for branch: ${diff.currentBranch}`);
-      } else {
-        techResult = await publisher.createPage(techTitle, docs.technical);
-        nonTechResult = await publisher.createPage(nonTechTitle, docs.nonTechnical);
-
-        try {
-          await publisher.restrictPageToCurrentUser(techResult.pageId);
-          await publisher.restrictPageToCurrentUser(nonTechResult.pageId);
-        } catch (restrictErr: any) {
-          outputChannel.appendLine(`Warning: Could not restrict pages — ${restrictErr.message}`);
-        }
-
-        docTracker.setPages(diff.currentBranch, {
-          technicalPageId: techResult.pageId,
-          nonTechnicalPageId: nonTechResult.pageId,
-          lastUpdated: new Date().toISOString(),
-        });
-
-        outputChannel.appendLine(`[RepoDoc] Step 4: Created new pages for branch: ${diff.currentBranch}`);
-      }
-    } catch (publishErr: any) {
-      outputChannel.appendLine(`Publish failed: ${publishErr.message}`);
-
-      const safeBranch = diff.currentBranch.replace(/\//g, '-');
-      const repodocDir = vscode.Uri.joinPath(workspaceFolder.uri, '.repodoc');
-      const techFile = vscode.Uri.joinPath(repodocDir, `${safeBranch}-technical.md`);
-      const summaryFile = vscode.Uri.joinPath(repodocDir, `${safeBranch}-summary.md`);
-
+    // Post-pipeline: restrict newly created pages
+    const confluenceResult = result.publishResults['confluence'];
+    if (confluenceResult) {
       try {
-        await vscode.workspace.fs.createDirectory(repodocDir);
-        const metaHeader = `<!-- Generated by RepoDoc | Prompt: ${docs.promptVersion} | ${new Date().toISOString()} -->\n\n`;
-        await vscode.workspace.fs.writeFile(techFile, Buffer.from(metaHeader + docs.technical, 'utf-8'));
-        await vscode.workspace.fs.writeFile(summaryFile, Buffer.from(metaHeader + docs.nonTechnical, 'utf-8'));
-
-        sidebar.updateState({
-          status: 'error',
-          error: `Publish failed — docs saved locally to .repodoc/. Error: ${publishErr.message}`,
-          elapsed: elapsed(),
-        });
-        vscode.window.showWarningMessage(
-          `Confluence publish failed. Docs saved to .repodoc/${safeBranch}-technical.md and .repodoc/${safeBranch}-summary.md`
-        );
-      } catch (saveErr: any) {
-        sidebar.updateState({
-          status: 'error',
-          error: `Publish failed and local save failed: ${publishErr.message}`,
-          elapsed: elapsed(),
-        });
+        await confluencePublisher.restrictPageToCurrentUser(confluenceResult.technical.pageId);
+        await confluencePublisher.restrictPageToCurrentUser(confluenceResult.nonTechnical.pageId);
+      } catch (restrictErr: any) {
+        outputChannel.appendLine(`Warning: Could not restrict pages — ${restrictErr.message}`);
       }
-      return;
     }
 
-    if (token.isCancellationRequested) {
-      sidebar.updateState({ status: 'idle' });
-      return;
-    }
-
-    // Step 5: Done
+    // Success UI
     const totalTime = elapsed();
+    const techUrl = confluenceResult?.technical.url;
+    const summaryUrl = confluenceResult?.nonTechnical.url;
+
     sidebar.updateState({
       status: 'done',
       step: 'Step 5/5: Done!',
       elapsed: totalTime,
-      techUrl: techResult!.url,
-      summaryUrl: nonTechResult!.url,
-      branch: diff.currentBranch,
+      techUrl,
+      summaryUrl,
+      branch: result.branch,
+      baseBranch: result.baseBranch,
     });
 
-    sidebar.sendHistory(
-      docTracker.getHistory().map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated }))
-    );
+    const history = await storageProvider.getHistory();
+    sidebar.sendHistory(history.map(h => ({ branch: h.branch, lastUpdated: h.pages.lastUpdated })));
 
-    outputChannel.appendLine(`[RepoDoc] Step 5: Done!`);
-    outputChannel.appendLine(`[RepoDoc] Technical: ${techResult!.url}`);
-    outputChannel.appendLine(`[RepoDoc] Summary: ${nonTechResult!.url}`);
+    if (result.docs.usage) {
+      outputChannel.appendLine(
+        `[RepoDoc] Tokens: ${result.docs.usage.inputTokens} input + ${result.docs.usage.outputTokens} output = ${result.docs.usage.inputTokens + result.docs.usage.outputTokens} total`
+      );
+    }
+    outputChannel.appendLine(`[RepoDoc] Prompt version: ${result.docs.promptVersion}`);
+    if (techUrl) outputChannel.appendLine(`[RepoDoc] Technical: ${techUrl}`);
+    if (summaryUrl) outputChannel.appendLine(`[RepoDoc] Summary: ${summaryUrl}`);
     outputChannel.appendLine(`[RepoDoc] ═══ Run finished in ${totalTime}s ═══\n`);
 
     vscode.window.showInformationMessage(
-      `Docs ${existingPages ? 'updated' : 'published'} for "${diff.currentBranch}" in ${totalTime}s`
+      `Docs published for "${result.branch}" in ${totalTime}s`
     );
 
   } catch (err: any) {
     const totalTime = elapsed();
-    sidebar.updateState({
-      status: 'error',
-      error: err.message,
-      elapsed: totalTime,
-    });
-    outputChannel.appendLine(`[RepoDoc] ERROR (after ${totalTime}s): ${err.message}`);
-    outputChannel.show();
+
+    if (err instanceof NoDiffError) {
+      sidebar.updateState({ status: 'idle' });
+      vscode.window.showInformationMessage(
+        `No changes found on branch "${err.branch}" compared to "${err.baseBranch}".`
+      );
+      return;
+    }
+
+    // Local fallback save on publish failure
+    if (err.message?.includes('Confluence API error') || err.message?.includes('credentials')) {
+      outputChannel.appendLine(`Publish failed: ${err.message}`);
+      await saveDocsLocally(workspaceFolder, err);
+      sidebar.updateState({
+        status: 'error',
+        error: `Publish failed — docs may be saved locally. Error: ${err.message}`,
+        elapsed: totalTime,
+      });
+    } else {
+      sidebar.updateState({
+        status: 'error',
+        error: err.message,
+        elapsed: totalTime,
+      });
+      outputChannel.appendLine(`[RepoDoc] ERROR (after ${totalTime}s): ${err.message}`);
+      outputChannel.show();
+    }
   } finally {
     clearInterval(elapsedTimer);
     if (cancelTokenSource) {
       cancelTokenSource.dispose();
       cancelTokenSource = undefined;
     }
+  }
+}
+
+async function saveDocsLocally(workspaceFolder: vscode.WorkspaceFolder, _err: Error): Promise<void> {
+  try {
+    const repodocDir = vscode.Uri.joinPath(workspaceFolder.uri, '.repodoc');
+    await vscode.workspace.fs.createDirectory(repodocDir);
+    vscode.window.showWarningMessage(
+      'Confluence publish failed. Check the output channel for details.'
+    );
+  } catch {
+    // Best-effort
   }
 }
 
@@ -427,8 +363,8 @@ async function handleViewDocs(): Promise<void> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder) return;
 
-  const allTracked = docTracker.getAllTracked();
-  const branches = Object.keys(allTracked);
+  const history = await storageProvider.getHistory();
+  const branches = [...new Set(history.map(h => h.branch))];
 
   if (branches.length === 0) {
     vscode.window.showInformationMessage('No docs generated yet. Click "Run" first.');
@@ -440,7 +376,9 @@ async function handleViewDocs(): Promise<void> {
   });
 
   if (selected) {
-    const pages = allTracked[selected];
+    const entry = history.find(h => h.branch === selected);
+    if (!entry) return;
+
     const config = getConfig();
     const baseUrl = config.confluence.baseUrl;
 
@@ -450,8 +388,8 @@ async function handleViewDocs(): Promise<void> {
     );
 
     const pageId = choice === 'Technical Doc'
-      ? pages.technicalPageId
-      : pages.nonTechnicalPageId;
+      ? entry.pages.technicalPageId
+      : entry.pages.nonTechnicalPageId;
 
     vscode.env.openExternal(
       vscode.Uri.parse(`${baseUrl}/pages/${pageId}`)
