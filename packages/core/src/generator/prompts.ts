@@ -1,6 +1,6 @@
 import type { BranchDiff } from '../git/diff';
 import type { RepoContext } from '../scanner/scanner';
-import type { DocLength } from '../config/settings';
+import type { DocLength } from '../config/types';
 
 export const PROMPT_VERSION = '2.0.0';
 

@@ -225,6 +225,7 @@
     "typescript": "^5.3.0"
   },
   "dependencies": {
+    "@repodoc/core": "*",
     "@anthropic-ai/sdk": "^0.30.0",
     "@aws-sdk/client-bedrock-runtime": "^3.400.0",
     "@aws-sdk/credential-providers": "^3.1113.0",

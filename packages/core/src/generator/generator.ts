@@ -1,7 +1,7 @@
 import type { LLMProvider, TokenUsage } from '../llm/provider';
 import type { BranchDiff } from '../git/diff';
 import type { RepoContext } from '../scanner/scanner';
-import type { DocLength } from '../config/settings';
+import type { DocLength } from '../config/types';
 import { SYSTEM_PROMPT, PROMPT_VERSION, buildTechnicalPrompt, buildNonTechnicalPrompt } from './prompts';
 
 export interface GeneratedDocs {
