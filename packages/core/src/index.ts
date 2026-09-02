@@ -27,3 +27,7 @@ export { createProvider } from './llm/provider';
 // Generator
 export type { GeneratedDocs } from './generator/generator';
 export { generateDocs } from './generator/generator';
+
+// Pipeline
+export type { PipelineAdapters, PipelineOptions, PipelineResult } from './pipeline/pipeline';
+export { runPipeline, NoDiffError } from './pipeline/pipeline';
